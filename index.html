@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover" />
 <meta name="theme-color" content="#0f766e" />
 <title>智能健身饮食方案</title>
-<link rel="stylesheet" href="assets/css/styles.css?v=4" />
+<link rel="stylesheet" href="assets/css/styles.css?v=6" />
 </head>
 <body>
 <main class="app">
@@ -50,6 +50,32 @@
           <option>5</option><option>6</option><option>7</option>
         </select></label>
     </div>
+    <div class="pref-panels">
+      <section class="pref-panel">
+        <div class="pref-head">
+          <b>训练偏好</b>
+          <span class="muted">可多选，影响动作替换与有氧安排</span>
+        </div>
+        <div class="check-grid">
+          <label class="check-chip"><input type="checkbox" name="trainingPref" value="home"><span>居家可练优先</span></label>
+          <label class="check-chip"><input type="checkbox" name="trainingPref" value="machine"><span>器械稳定优先</span></label>
+          <label class="check-chip"><input type="checkbox" name="trainingPref" value="cardio"><span>多一点有氧</span></label>
+        </div>
+      </section>
+      <section class="pref-panel">
+        <div class="pref-head">
+          <b>饮食偏好</b>
+          <span class="muted">可多选，影响食材轮换与推荐食谱</span>
+        </div>
+        <div class="check-grid">
+          <label class="check-chip"><input type="checkbox" name="dietPref" value="rice"><span>米饭/薯类主食</span></label>
+          <label class="check-chip"><input type="checkbox" name="dietPref" value="oat"><span>燕麦/面包主食</span></label>
+          <label class="check-chip"><input type="checkbox" name="dietPref" value="seafood"><span>海鲜优先</span></label>
+          <label class="check-chip"><input type="checkbox" name="dietPref" value="no_beef"><span>不吃牛肉</span></label>
+          <label class="check-chip"><input type="checkbox" name="dietPref" value="low_lactose"><span>低乳糖</span></label>
+        </div>
+      </section>
+    </div>
     <button class="btn primary block mt12" id="btn-gen">生成方案</button>
   </section>
 
@@ -65,13 +91,13 @@
   <p class="footer no-print">数据本地缓存 · 纯前端 · 无追踪</p>
 </main>
 
-<script src="assets/js/data.js?v=4"></script>
-<script src="assets/js/training.js?v=4"></script>
-<script src="assets/js/recipes.js?v=4"></script>
-<script src="assets/js/extract.js?v=4"></script>
-<script src="assets/js/calc.js?v=4"></script>
-<script src="assets/js/render.js?v=4"></script>
-<script src="assets/js/app.js?v=4"></script>
+<script src="assets/js/data.js?v=6"></script>
+<script src="assets/js/training.js?v=6"></script>
+<script src="assets/js/recipes.js?v=6"></script>
+<script src="assets/js/extract.js?v=6"></script>
+<script src="assets/js/calc.js?v=6"></script>
+<script src="assets/js/render.js?v=6"></script>
+<script src="assets/js/app.js?v=6"></script>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
 </body>
 </html>

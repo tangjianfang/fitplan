@@ -9,6 +9,35 @@
   };
   const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
+  function setChecks(name, values) {
+    const picked = new Set(Array.isArray(values) ? values : []);
+    document.querySelectorAll(`input[name="${name}"]`).forEach((input) => {
+      input.checked = picked.has(input.value);
+    });
+  }
+
+  function getChecks(name) {
+    return [...document.querySelectorAll(`input[name="${name}"]:checked`)].map((input) => input.value);
+  }
+
+  const TRAIN_PREF_LABELS = {
+    home: '居家可练优先',
+    machine: '器械稳定优先',
+    cardio: '多一点有氧',
+  };
+  const DIET_PREF_LABELS = {
+    rice: '米饭/薯类主食',
+    oat: '燕麦/面包主食',
+    seafood: '海鲜优先',
+    no_beef: '不吃牛肉',
+    low_lactose: '低乳糖',
+  };
+
+  function renderPrefBadges(title, values, labels) {
+    if (!Array.isArray(values) || !values.length) return '';
+    return `<div class="badge-row"><span class="bdg">${esc(title)}</span>${values.map((value) => `<span class="bdg ghost">${esc(labels[value] || value)}</span>`).join('')}</div>`;
+  }
+
   function renderForm(parsed) {
     $('#sex').value = parsed.sex || 'male';
     $('#age').value = parsed.age ?? '';
@@ -18,6 +47,8 @@
     $('#goal').value = parsed.goal || 'cut';
     $('#activity').value = parsed.activityId || 'light_day';
     if ($('#freq')) $('#freq').value = parsed.freqPerWeek ?? '';
+    setChecks('trainingPref', parsed.trainingPrefs);
+    setChecks('dietPref', parsed.dietPrefs);
     const need = ['sex','age','heightCm','weightKg','goal'];
     const got = need.filter(k => parsed[k] != null && parsed[k] !== '').length;
     $('#confidence').textContent = `抽取 ${got}/${need.length}`;
@@ -33,6 +64,8 @@
       goal: $('#goal').value,
       activityId: $('#activity').value,
       freqPerWeek: $('#freq') && $('#freq').value ? +$('#freq').value : null,
+      trainingPrefs: getChecks('trainingPref'),
+      dietPrefs: getChecks('dietPref'),
       hasResistance: true,
     };
   }
@@ -146,6 +179,7 @@
         <span class="bdg brand">${esc(tp.splitName)}</span>
         <span class="bdg ghost">组间 ${tp.tune.restDelta>=0?'+':''}${tp.tune.restDelta}s · 训练量 ${tp.tune.setsDelta>=0?'+':''}${tp.tune.setsDelta} 组</span>
       </div>
+      ${renderPrefBadges('训练偏好', r.preferences.training, TRAIN_PREF_LABELS)}
       <p class="muted" style="margin:6px 0 10px">${esc(tp.splitDesc)}</p>
       <h3>训练原则</h3>
       <ul class="tight">${note}</ul>
@@ -204,7 +238,7 @@
   }
 
   function secMeals(r, form) {
-    return r.meals.map(m => `
+    return renderPrefBadges('饮食偏好', r.preferences.diet, DIET_PREF_LABELS) + r.meals.map(m => `
       <div class="meal">
         <h4><span>${esc(m.name)}</span><span class="kcal">${m.kcal} kcal</span></h4>
         <div class="meta">碳水 ${m.carbG} g · 蛋白 ${m.proteinG} g · 脂肪 ${m.fatG} g</div>
@@ -215,7 +249,7 @@
   }
 
   function secRecipes(r, form) {
-    const R = window.RECIPES[form.goal] || window.RECIPES.maintain;
+    const R = r.recipes;
     const block = (label, list) => `
       <h3>${label}</h3>
       <div class="recipe-grid">
@@ -226,7 +260,10 @@
             <div class="note">${esc(rc.how)}</div>
           </div>`).join('')}
       </div>`;
-    return block('早餐方案', R.early) + block('练后餐方案', R.post) + block('晚餐方案', R.last);
+    return renderPrefBadges('饮食偏好', r.preferences.diet, DIET_PREF_LABELS)
+      + block('早餐方案', R.early)
+      + block('练后餐方案', R.post)
+      + block('晚餐方案', R.last);
   }
 
   function secWorkoutNut(r) {

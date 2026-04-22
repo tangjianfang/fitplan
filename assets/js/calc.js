@@ -124,6 +124,45 @@
     return { value: +v.toFixed(1), cat };
   }
 
+  function normalizePrefs(form) {
+    return {
+      training: Array.isArray(form.trainingPrefs) ? form.trainingPrefs : [],
+      diet: Array.isArray(form.dietPrefs) ? form.dietPrefs : [],
+    };
+  }
+
+  function hasPref(list, key) {
+    return Array.isArray(list) && list.includes(key);
+  }
+
+  function isHomeFriendlyExercise(ex) {
+    return !!ex.home || /徒手|哑铃|单杠|长凳/.test(ex.eq || '');
+  }
+
+  function isMachineFriendlyExercise(ex) {
+    return /绳索|机|下拉器|腿举|提踵|靠背|哑铃/.test(ex.eq || '');
+  }
+
+  function scoreExercise(ex, base, prefs) {
+    let score = ex.name === base.name ? 6 : 0;
+    if (ex.type === base.type) score += 2;
+    if (hasPref(prefs.training, 'home')) score += isHomeFriendlyExercise(ex) ? 12 : -8;
+    if (hasPref(prefs.training, 'machine')) score += isMachineFriendlyExercise(ex) ? 10 : -4;
+    return score;
+  }
+
+  function pickSessionExercise(item, prefs, usedNames) {
+    const pool = window.EXERCISES[item.grp] || [];
+    const base = pool.find(ex => ex.name === item.name) || pool[0];
+    if (!base) return null;
+    const scored = pool
+      .map(ex => ({ ex, score: scoreExercise(ex, base, prefs) }))
+      .sort((a, b) => b.score - a.score);
+    const picked = scored.find(({ ex }) => !usedNames.has(ex.name))?.ex || scored[0]?.ex || base;
+    usedNames.add(picked.name);
+    return picked;
+  }
+
   // 食物推荐：每餐按目标三大量精准反算 + 餐间食材轮换 + 单一食材量过大时自动拆分
   // 餐次轮换池
   const PROTEIN_ROTATION = {
@@ -138,20 +177,91 @@
   };
   const VEG_ROTATION = ['西兰花','菠菜','番茄','青椒','黄瓜','生菜','油麦菜','金针菇'];
 
+  function dedupeChoices(list) {
+    const seen = new Set();
+    return list.filter((choice) => {
+      const key = choice.join('|');
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
+  function getProteinRotation(goal, prefs, mealTag) {
+    const base = (PROTEIN_ROTATION[goal] || PROTEIN_ROTATION.maintain).map(choice => choice.slice());
+    const front = [];
+    if (hasPref(prefs.diet, 'seafood') && mealTag !== 'early') {
+      front.push(['三文鱼'], ['龙利鱼','巴沙鱼'], ['虾','鳕鱼']);
+    }
+    let merged = dedupeChoices([...front, ...base]);
+    if (hasPref(prefs.diet, 'no_beef')) {
+      merged = merged.map(choice => choice.filter(name => !/牛/.test(name))).filter(choice => choice.length);
+    }
+    return merged.length ? merged : base;
+  }
+
+  function getCarbRotation(goal, prefs) {
+    const base = (CARB_ROTATION[goal] || CARB_ROTATION.maintain).map(choice => choice.slice());
+    const front = [];
+    if (hasPref(prefs.diet, 'rice')) {
+      front.push(['白米饭','熟'], ['糙米饭','熟'], ['紫薯蒸','熟'], ['土豆蒸','熟']);
+    }
+    if (hasPref(prefs.diet, 'oat')) {
+      front.push(['燕麦粥','熟'], ['全麦面包','熟']);
+    }
+    return front.length ? dedupeChoices([...front, ...base]) : base;
+  }
+
+  function recipeFlags(recipe) {
+    const text = `${recipe.name} ${(recipe.items || []).join(' ')}`;
+    return {
+      seafood: /虾|鱼|三文鱼|鲈鱼|龙利鱼|巴沙鱼/.test(text),
+      beef: /牛肉|牛里脊|牛腱|牛排|牛腩/.test(text),
+      lactose: /牛奶|酸奶|奶酪/.test(text),
+      rice: /米饭|土豆|紫薯|藜麦/.test(text),
+      oat: /燕麦|面包|吐司/.test(text),
+    };
+  }
+
+  function scoreRecipe(recipe, prefs) {
+    const flags = recipeFlags(recipe);
+    if (hasPref(prefs.diet, 'low_lactose') && flags.lactose) return -99;
+    if (hasPref(prefs.diet, 'no_beef') && flags.beef) return -99;
+    let score = 0;
+    if (hasPref(prefs.diet, 'seafood') && flags.seafood) score += 4;
+    if (hasPref(prefs.diet, 'rice') && flags.rice) score += 3;
+    if (hasPref(prefs.diet, 'oat') && flags.oat) score += 3;
+    return score;
+  }
+
+  function pickPreferredRecipes(goal, prefs) {
+    const base = window.RECIPES[goal] || window.RECIPES.maintain;
+    const pickSlot = (slot) => {
+      const items = base[slot] || [];
+      const ranked = items
+        .map((recipe, idx) => ({ recipe, idx, score: scoreRecipe(recipe, prefs) }))
+        .filter(({ score }) => score > -99)
+        .sort((a, b) => (b.score - a.score) || (a.idx - b.idx))
+        .map(({ recipe }) => recipe);
+      return (ranked.length ? ranked : items).slice(0, Math.min(3, items.length));
+    };
+    return { early: pickSlot('early'), post: pickSlot('post'), last: pickSlot('last') };
+  }
+
   function pickFoodByName(name, raw) {
     return window.FOODS.find(f => f.name === name && (raw ? f.raw === raw : true))
         || window.FOODS.find(f => f.name === name);
   }
 
   // meal.idx 是该餐次序号（0/1/2），用于轮换
-  function pickMealFoods(meal, goal) {
+  function pickMealFoods(meal, goal, prefs) {
     const items = [];
     let { carbG, proteinG, fatG } = meal;
     const idx = meal.idx ?? 0;
 
     // 1) 蛋白质（轮换 + 大量自动拆分）
     if (proteinG > 0) {
-      const pickList = PROTEIN_ROTATION[goal] || PROTEIN_ROTATION.maintain;
+      const pickList = getProteinRotation(goal, prefs, meal.tag);
       const choice = pickList[idx % pickList.length];
       const main = pickFoodByName(choice[0], '生');
       if (main) {
@@ -193,7 +303,7 @@
 
     // 2) 碳水（轮换；减脂末餐少/无碳水已在 mealsPlan 中减量）
     if (carbG > 5) {
-      const list = CARB_ROTATION[goal] || CARB_ROTATION.maintain;
+      const list = getCarbRotation(goal, prefs);
       const choice = list[idx % list.length];
       const carb = pickFoodByName(choice[0], choice[1]);
       if (carb) {
@@ -243,10 +353,13 @@
   }
 
   // 训练参考（仅文档涉及部分：抗阻训练对维持肌肉/代谢的作用 + 频率与活动系数对应）
-  function trainingNotes(goal, freq, hasResistance, actId) {
+  function trainingNotes(goal, freq, hasResistance, actId, prefs) {
     const out = [];
     const a = window.ACTIVITY_LEVELS.find(x => x.id === actId);
     out.push(`已选活动水平：${a ? `${a.name}（${a.desc}）· ×${a.factor}` : '—'}`);
+    if (hasPref(prefs.training, 'home')) out.push('已按“居家可练优先”尽量替换为徒手、哑铃、单杠友好动作。');
+    if (hasPref(prefs.training, 'machine')) out.push('已按“器械稳定优先”提高哑铃、绳索、固定器械动作占比。');
+    if (hasPref(prefs.training, 'cardio')) out.push('已按“多一点有氧”在每次训练收尾额外增加约 10 分钟有氧。');
     if (goal === 'cut') {
       out.push('减脂期务必结合抗阻训练，并保证蛋白摄入，以维持肌肉与力量水平、避免基础代谢下降（文档：代谢适应规避要点 2）。');
       out.push('代谢适应触发条件：两个月内脂肪量下降 >当前总体重 10%。可每月安排 4–5 次"高热量日"（不超过当前每日总消耗）。');
@@ -276,6 +389,7 @@
 
   // —— 详细周训练计划（Hevy / Fitbod 风格）
   function buildTrainingPlan(form) {
+    const prefs = normalizePrefs(form);
     const goal = form.goal;
     let freq = form.freqPerWeek;
     if (!freq || freq < 1) {
@@ -287,6 +401,7 @@
     const split = window.TRAINING_SPLITS[freq];
     const layout = window.WEEK_LAYOUTS[freq];
     const tune = window.GOAL_TRAINING_TUNE[goal] || window.GOAL_TRAINING_TUNE.maintain;
+    const cardioBonus = hasPref(prefs.training, 'cardio') ? 10 : 0;
 
     const days = split.sessions.map((sessionId, i) => {
       const tpl = window.SESSION_TEMPLATES[sessionId];
@@ -295,14 +410,15 @@
           weekday: layout[i], title: tpl.name, sessionId,
           warmup: ['5 分钟动态拉伸'],
           exercises: [],
-          cardio: '中低强度有氧 30-45 分钟（慢跑/骑行/游泳/快走）',
+          cardio: `中低强度有氧 ${30 + cardioBonus}-${45 + cardioBonus} 分钟（慢跑/骑行/游泳/快走）`,
           cooldown: window.EXERCISES.cooldown.slice(0,2),
           totalSets: 0,
-          minutes: 35,
+          minutes: 35 + cardioBonus,
         };
       }
+      const usedNames = new Set();
       const exercises = tpl.items.map(it => {
-        const ex = (window.EXERCISES[it.grp] || []).find(e => e.name === it.name);
+        const ex = pickSessionExercise(it, prefs, usedNames);
         if (!ex) return null;
         const sets = Math.max(1, ex.sets + tune.setsDelta);
         const rest = Math.max(30, ex.rest + tune.restDelta);
@@ -310,37 +426,39 @@
       }).filter(Boolean);
       const totalSets = exercises.reduce((s,e)=>s+e.sets, 0);
       // 每组工作时长 ≈ 40s + 休息
-      const minutes = Math.round(exercises.reduce((s,e)=> s + e.sets*(40+e.rest)/60, 0)) + 12; // 12 = 热身+放松
+      const minutes = Math.round(exercises.reduce((s,e)=> s + e.sets*(40+e.rest)/60, 0)) + 12 + cardioBonus; // 12 = 热身+放松
       return {
         weekday: layout[i],
         title: tpl.name,
         sessionId,
         warmup: window.EXERCISES.warmup,
         exercises,
-        cardio: `${tune.cardioMin} 分钟 ${tune.cardioType}`,
+        cardio: `${tune.cardioMin + cardioBonus} 分钟 ${tune.cardioType}`,
         cooldown: window.EXERCISES.cooldown,
         totalSets,
         minutes,
       };
     });
-    return { freq, splitName: split.name, splitDesc: split.desc, days, tune };
+    return { freq, splitName: split.name, splitDesc: split.desc, days, tune: { ...tune, cardioMin: tune.cardioMin + cardioBonus }, prefs };
   }
 
   // 总入口
   function buildReport(form) {
     const { sex, age, heightCm, weightKg, bodyFatPct, goal, activityId, freqPerWeek, hasResistance } = form;
+    const prefs = normalizePrefs(form);
     const bmrVal = bmr(sex, age, weightKg);
     const tdeeVal = tdee(bmrVal, activityId);
     const tgt = targetCalories({ goal, tdeeVal, bmrVal, weightKg });
     const M = macros(tgt.kcal, goal);
     const meals = mealsPlan(M, goal);
-    const meal_foods = meals.map((m, idx) => ({ ...m, idx, foods: pickMealFoods({ ...m, idx }, goal) }));
+    const meal_foods = meals.map((m, idx) => ({ ...m, idx, foods: pickMealFoods({ ...m, idx }, goal, prefs) }));
     const fiber = fiberTarget(tgt.kcal, goal, sex);
     const water = waterPlan(weightKg);
     const bmiV = bmi(heightCm, weightKg);
     const cooking = cookingRules(goal);
-    const training = trainingNotes(goal, freqPerWeek, hasResistance, activityId);
+    const training = trainingNotes(goal, freqPerWeek, hasResistance, activityId, prefs);
     const trainingPlan = buildTrainingPlan(form);
+    const recipes = pickPreferredRecipes(goal, prefs);
     const adjust = monthlyAdjust(goal);
 
     const leanMassKg = bodyFatPct ? +(weightKg * (1 - bodyFatPct/100)).toFixed(1) : null;
@@ -349,7 +467,7 @@
     return {
       input: form, bmr: Math.round(bmrVal), tdee: Math.round(tdeeVal),
       target: tgt, macros: M, meals: meal_foods, fiber, water, bmi: bmiV,
-      leanMassKg, fatMassKg, cooking, training, trainingPlan, adjust,
+      leanMassKg, fatMassKg, cooking, training, trainingPlan, recipes, preferences: prefs, adjust,
       activity: window.ACTIVITY_LEVELS.find(a => a.id === activityId),
     };
   }

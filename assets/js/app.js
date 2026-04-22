@@ -66,6 +66,9 @@
         sex: p.form.sex, age: p.form.age, heightCm: p.form.heightCm,
         weightKg: p.form.weightKg, bodyFatPct: p.form.bodyFatPct,
         goal: p.form.goal, activityId: p.form.activityId,
+        freqPerWeek: p.form.freqPerWeek,
+        trainingPrefs: p.form.trainingPrefs,
+        dietPrefs: p.form.dietPrefs,
       });
       if (p.formShown) $('#form-card').classList.remove('hidden');
       if (p.reportShown && p.form.age && p.form.weightKg && p.form.heightCm) {
@@ -102,6 +105,10 @@
       if (!e) return;
       e.addEventListener('input', () => saveAll());
       e.addEventListener('change', () => saveAll());
+    });
+
+    document.querySelectorAll('input[name="trainingPref"], input[name="dietPref"]').forEach((input) => {
+      input.addEventListener('change', () => saveAll());
     });
 
     $('#nl').addEventListener('keydown', e => {
