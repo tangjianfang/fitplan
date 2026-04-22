@@ -130,7 +130,92 @@ ul.tight li{margin:2px 0}
 @media print{
   body{background:#fff;padding:0}
   .app{max-width:none;padding:0}
-  .no-print,.actions,#input-card,#form-card{display:none !important}
+  .no-print,.actions,#input-card,#form-card,.report-toc{display:none !important}
+  .report-layout{display:block !important}
+  .report-main{margin-left:0 !important}
   .r-card{break-inside:avoid;page-break-inside:avoid;box-shadow:none}
-  .meal{break-inside:avoid}
+  .meal,.recipe,.day-card{break-inside:avoid}
+}
+
+/* ============ TOC + 内容布局 ============ */
+.report-layout{display:flex;gap:16px;align-items:flex-start;position:relative}
+.report-main{flex:1 1 auto;min-width:0}
+.report-toc{
+  flex:0 0 200px;position:sticky;top:64px;
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  padding:10px 8px;max-height:calc(100vh - 80px);overflow-y:auto;
+  box-shadow:var(--shadow);
+}
+.report-toc .toc-title{font-size:12px;color:var(--muted);padding:4px 10px 8px;border-bottom:1px solid var(--line);margin-bottom:6px;letter-spacing:.5px}
+#toc-list{list-style:none;margin:0;padding:0;counter-reset:toc}
+#toc-list li{counter-increment:toc}
+#toc-list a{
+  display:flex;align-items:center;gap:8px;
+  padding:8px 10px;border-radius:8px;
+  color:#334155;text-decoration:none;font-size:13px;
+  border-left:3px solid transparent;transition:all .15s;
+}
+#toc-list a:hover{background:var(--soft);color:var(--brand)}
+#toc-list a.active{background:#ecfdf5;color:var(--brand);border-left-color:var(--brand);font-weight:600}
+#toc-list a .ti{flex:0 0 18px;text-align:center;font-size:14px;line-height:1}
+
+/* 移动端：TOC 转横向滚动条贴顶 */
+@media (max-width:760px){
+  .report-layout{display:block}
+  .report-toc{
+    position:sticky;top:54px;z-index:4;
+    flex:none;width:auto;max-height:none;
+    padding:6px 4px;margin-bottom:10px;border-radius:10px;
+  }
+  .report-toc .toc-title{display:none}
+  #toc-list{display:flex;overflow-x:auto;gap:4px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  #toc-list::-webkit-scrollbar{display:none}
+  #toc-list a{
+    border-left:0;border-bottom:2px solid transparent;
+    padding:6px 10px;white-space:nowrap;border-radius:6px;
+  }
+  #toc-list a.active{border-left:0;border-bottom-color:var(--brand);background:#ecfdf5}
+  #toc-list a .ti{display:none}
+}
+
+/* 锚点偏移（避免被 sticky actions 挡住） */
+.r-card{scroll-margin-top:80px}
+
+/* badges */
+.badge-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.bdg{font-size:12px;padding:4px 10px;border-radius:999px;background:var(--soft);color:#334155;border:1px solid var(--line)}
+.bdg.brand{background:var(--brand);color:#fff;border-color:var(--brand)}
+.bdg.ghost{background:#fff;color:var(--brand);border-color:var(--brand)}
+
+/* 训练日卡片 */
+.day-grid{display:grid;grid-template-columns:1fr;gap:10px}
+@media (min-width:760px){.day-grid{grid-template-columns:repeat(2,1fr)}}
+.day-card{border:1px solid var(--line);border-radius:10px;padding:12px;background:#fafbfc}
+.day-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;font-size:14px}
+.day-head b{color:#1e3a8a}
+.day-detail{margin-top:8px}
+.day-detail summary{font-size:12px;cursor:pointer;list-style:none;padding:4px 0}
+.day-detail summary::-webkit-details-marker{display:none}
+.day-detail h4{margin:10px 0 4px;font-size:12px;color:var(--brand);font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.day-detail h4:first-of-type{margin-top:6px}
+.day-detail ul{margin:4px 0;padding-left:18px;font-size:13px;line-height:1.7}
+
+/* 表格 */
+.tbl{width:100%;border-collapse:collapse;font-size:13px;margin:6px 0}
+.tbl th,.tbl td{border-bottom:1px solid var(--line);padding:6px 4px;text-align:left;vertical-align:top}
+.tbl th{font-weight:600;color:var(--muted);font-size:11px;background:var(--soft)}
+.tbl td.ctr,.tbl th.ctr{text-align:center}
+.tbl td.num-td{text-align:center;color:var(--muted);width:24px;font-size:11px}
+
+/* 食谱网格 */
+.recipe-grid{display:grid;grid-template-columns:1fr;gap:10px;margin-top:6px}
+@media (min-width:760px){.recipe-grid{grid-template-columns:repeat(2,1fr)}}
+@media (min-width:1100px){.recipe-grid{grid-template-columns:repeat(3,1fr)}}
+.recipe{border:1px solid var(--line);border-radius:10px;padding:12px;background:#fafbfc}
+.recipe .r-name{font-weight:700;color:#1e3a8a;font-size:14px;margin-bottom:6px}
+.recipe ul{margin:4px 0;padding-left:18px;font-size:13px;line-height:1.7}
+
+/* 整体宽度调高（桌面端有侧栏） */
+@media (min-width:900px){
+  .app{max-width:1100px}
 }

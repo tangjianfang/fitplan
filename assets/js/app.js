@@ -97,7 +97,7 @@
     $('#btn-back').onclick = () => $('#input-card').scrollIntoView({behavior:'smooth'});
 
     // 输入实时缓存
-    ['#nl','#sex','#age','#height','#weight','#bodyFat','#goal','#activity'].forEach(sel => {
+    ['#nl','#sex','#age','#height','#weight','#bodyFat','#goal','#activity','#freq'].forEach(sel => {
       const e = $(sel);
       if (!e) return;
       e.addEventListener('input', () => saveAll());

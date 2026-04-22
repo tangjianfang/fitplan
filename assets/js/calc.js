@@ -274,6 +274,58 @@
     return ['维持期以体重/腰围/体脂保持稳定为目标，每周称重 1–2 次，固定时间与状态。'];
   }
 
+  // —— 详细周训练计划（Hevy / Fitbod 风格）
+  function buildTrainingPlan(form) {
+    const goal = form.goal;
+    let freq = form.freqPerWeek;
+    if (!freq || freq < 1) {
+      // 从 activityId 推断
+      const map = { sedentary:1, light_day:2, micro:2, light:3, moderate:4, active:5, very_active:6, athlete:6 };
+      freq = map[form.activityId] || 3;
+    }
+    freq = Math.max(1, Math.min(7, +freq));
+    const split = window.TRAINING_SPLITS[freq];
+    const layout = window.WEEK_LAYOUTS[freq];
+    const tune = window.GOAL_TRAINING_TUNE[goal] || window.GOAL_TRAINING_TUNE.maintain;
+
+    const days = split.sessions.map((sessionId, i) => {
+      const tpl = window.SESSION_TEMPLATES[sessionId];
+      if (tpl.cardioOnly) {
+        return {
+          weekday: layout[i], title: tpl.name, sessionId,
+          warmup: ['5 分钟动态拉伸'],
+          exercises: [],
+          cardio: '中低强度有氧 30-45 分钟（慢跑/骑行/游泳/快走）',
+          cooldown: window.EXERCISES.cooldown.slice(0,2),
+          totalSets: 0,
+          minutes: 35,
+        };
+      }
+      const exercises = tpl.items.map(it => {
+        const ex = (window.EXERCISES[it.grp] || []).find(e => e.name === it.name);
+        if (!ex) return null;
+        const sets = Math.max(1, ex.sets + tune.setsDelta);
+        const rest = Math.max(30, ex.rest + tune.restDelta);
+        return { ...ex, grp: it.grp, sets, rest };
+      }).filter(Boolean);
+      const totalSets = exercises.reduce((s,e)=>s+e.sets, 0);
+      // 每组工作时长 ≈ 40s + 休息
+      const minutes = Math.round(exercises.reduce((s,e)=> s + e.sets*(40+e.rest)/60, 0)) + 12; // 12 = 热身+放松
+      return {
+        weekday: layout[i],
+        title: tpl.name,
+        sessionId,
+        warmup: window.EXERCISES.warmup,
+        exercises,
+        cardio: `${tune.cardioMin} 分钟 ${tune.cardioType}`,
+        cooldown: window.EXERCISES.cooldown,
+        totalSets,
+        minutes,
+      };
+    });
+    return { freq, splitName: split.name, splitDesc: split.desc, days, tune };
+  }
+
   // 总入口
   function buildReport(form) {
     const { sex, age, heightCm, weightKg, bodyFatPct, goal, activityId, freqPerWeek, hasResistance } = form;
@@ -288,6 +340,7 @@
     const bmiV = bmi(heightCm, weightKg);
     const cooking = cookingRules(goal);
     const training = trainingNotes(goal, freqPerWeek, hasResistance, activityId);
+    const trainingPlan = buildTrainingPlan(form);
     const adjust = monthlyAdjust(goal);
 
     const leanMassKg = bodyFatPct ? +(weightKg * (1 - bodyFatPct/100)).toFixed(1) : null;
@@ -296,10 +349,10 @@
     return {
       input: form, bmr: Math.round(bmrVal), tdee: Math.round(tdeeVal),
       target: tgt, macros: M, meals: meal_foods, fiber, water, bmi: bmiV,
-      leanMassKg, fatMassKg, cooking, training, adjust,
+      leanMassKg, fatMassKg, cooking, training, trainingPlan, adjust,
       activity: window.ACTIVITY_LEVELS.find(a => a.id === activityId),
     };
   }
 
-  window.CALC = { buildReport, bmr, tdee, targetCalories, macros, mealsPlan, fiberTarget, waterPlan, bmi };
+  window.CALC = { buildReport, buildTrainingPlan, bmr, tdee, targetCalories, macros, mealsPlan, fiberTarget, waterPlan, bmi };
 })();
