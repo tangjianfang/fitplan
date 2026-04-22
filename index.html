@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover" />
+<meta name="theme-color" content="#0f766e" />
+<title>智能健身饮食方案</title>
+<link rel="stylesheet" href="assets/css/styles.css" />
+</head>
+<body>
+<main class="app">
+  <header class="bar no-print">
+    <h1>智能健身饮食方案</h1>
+    <p>一段话生成专业方案 · 严格按《运动饮食指南》</p>
+  </header>
+
+  <section class="card no-print" id="input-card">
+    <textarea id="nl" rows="3" placeholder="例：男 32岁 178cm 78kg 体脂20% 想增肌 一周练4次"></textarea>
+    <div class="row gap8 mt8">
+      <button class="btn primary grow" id="btn-extract">智能抽取</button>
+      <button class="btn ghost" id="btn-clear">清空</button>
+    </div>
+    <div class="examples" id="chips"></div>
+  </section>
+
+  <section class="card no-print hidden" id="form-card">
+    <div class="form-head">
+      <span class="dot"></span><b>核心参数</b>
+      <span class="muted ml-auto" id="confidence">—</span>
+    </div>
+    <div class="form-grid">
+      <label class="f"><span>性别</span>
+        <select id="sex"><option value="male">男</option><option value="female">女</option></select></label>
+      <label class="f"><span>年龄</span><input id="age" type="number" inputmode="numeric" min="10" max="99"/></label>
+      <label class="f"><span>身高 cm</span><input id="height" type="number" inputmode="numeric" min="120" max="220"/></label>
+      <label class="f"><span>体重 kg</span><input id="weight" type="number" inputmode="decimal" min="30" max="200" step="0.1"/></label>
+      <label class="f"><span>体脂 %（可选）</span><input id="bodyFat" type="number" inputmode="decimal" min="3" max="60" step="0.1"/></label>
+      <label class="f"><span>目标</span>
+        <select id="goal">
+          <option value="bulk">增肌</option>
+          <option value="cut">减脂</option>
+          <option value="maintain">维持</option>
+        </select></label>
+      <label class="f span2"><span>活动水平</span>
+        <select id="activity"></select></label>
+    </div>
+    <button class="btn primary block mt12" id="btn-gen">生成方案</button>
+  </section>
+
+  <section id="report-wrap" class="hidden">
+    <div class="actions no-print">
+      <button class="btn primary grow" id="btn-print">导出 PDF</button>
+      <button class="btn ghost grow" id="btn-png">保存图片</button>
+      <button class="btn ghost" id="btn-back">返回</button>
+    </div>
+    <div id="report"></div>
+  </section>
+
+  <p class="footer no-print">数据本地缓存 · 纯前端 · 无追踪</p>
+</main>
+
+<script src="assets/js/data.js"></script>
+<script src="assets/js/extract.js"></script>
+<script src="assets/js/calc.js"></script>
+<script src="assets/js/render.js"></script>
+<script src="assets/js/app.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
+</body>
+</html>
