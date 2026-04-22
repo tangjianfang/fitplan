@@ -72,21 +72,62 @@
 
   function pct(part, total) { return total ? `${(part/total*100).toFixed(0)}%` : ''; }
 
-  const SECTIONS = [
-    ['assess',   '身体评估',     '👤'],
-    ['energy',   '热量与营养',   '🔥'],
-    ['training', '训练计划',     '🏋️'],
-    ['week',     '周训练排程',   '📅'],
-    ['meals',    '每日餐次',     '🍱'],
-    ['recipes',  '推荐食谱',     '👨‍🍳'],
-    ['workout-nutrition', '训练营养', '⚡'],
-    ['cooking',  '烹饪规则',     '🥘'],
-    ['water',    '水合补给',     '💧'],
-    ['supps',    '补剂参考',     '💊'],
-    ['eatout',   '外食与聚餐',   '🍽️'],
-    ['recovery', '睡眠与恢复',   '😴'],
-    ['plateau',  '平台期 & 复盘','📈'],
+  const SECTION_GROUPS = [
+    {
+      id: 'overview',
+      title: '核心概览',
+      icon: '📊',
+      report: true,
+      items: [
+        ['assess', '身体评估', '👤'],
+        ['energy', '热量与营养', '🔥'],
+      ],
+    },
+    {
+      id: 'training-plan',
+      title: '训练方案',
+      icon: '🏋️',
+      report: true,
+      items: [
+        ['training', '训练计划', '🏋️'],
+        ['week', '周训练排程', '📅'],
+      ],
+    },
+    {
+      id: 'diet-plan',
+      title: '饮食方案',
+      icon: '🍱',
+      report: true,
+      items: [
+        ['meals', '每日餐次', '🍱'],
+        ['recipes', '推荐食谱', '👨‍🍳'],
+      ],
+    },
+    {
+      id: 'rules',
+      title: '执行规则',
+      icon: '🧭',
+      report: true,
+      items: [
+        ['guidelines', '训练/饮食执行细则', '🧭'],
+      ],
+    },
+    {
+      id: 'reference',
+      title: '参考资料',
+      icon: '📚',
+      report: false,
+      items: [
+        ['supps', '补剂参考', '💊'],
+        ['eatout', '外食与聚餐', '🍽️'],
+        ['recovery', '睡眠与恢复', '😴'],
+        ['plateau', '平台期 & 复盘', '📈'],
+      ],
+    },
   ];
+  const REPORT_GROUPS = SECTION_GROUPS.filter(group => group.report);
+  const REPORT_SECTIONS = REPORT_GROUPS.flatMap(group => group.items.map(item => ({ groupId: group.id, groupTitle: group.title, id: item[0], title: item[1], icon: item[2] })));
+  const REFERENCE_GROUP = SECTION_GROUPS.find(group => !group.report);
 
   function renderReport(form) {
     if (!form.sex || !form.age || !form.weightKg || !form.heightCm || !form.goal) {
@@ -100,18 +141,50 @@
         <div class="toc-title">方案目录</div>
         <ol id="toc-list"></ol>
       </aside>
-      <div class="report-main" id="report-main"></div>
+      <div class="report-column">
+        <div class="report-main" id="report-main"></div>
+        <section class="ref-panel no-print" id="reference-area"></section>
+      </div>
     `;
     const tocList = $('#toc-list');
     const main = $('#report-main');
+    const referenceArea = $('#reference-area');
+    let reportIndex = 0;
 
-    SECTIONS.forEach(([id, title, icon], i) => {
-      const li = el('li', {}, `<a href="#sec-${id}" data-target="sec-${id}"><span class="ti">${icon}</span><span>${esc(title)}</span></a>`);
-      tocList.appendChild(li);
-      const sec = el('section', { id: `sec-${id}`, class: 'r-card', 'data-sec': id });
-      sec.innerHTML = `<h2><span class="num">${i+1}</span>${esc(title)}</h2>` + renderSectionBody(id, r, form);
-      main.appendChild(sec);
+    SECTION_GROUPS.forEach((group) => {
+      const groupEl = el('li', { class: 'toc-group' });
+      groupEl.innerHTML = `
+        <div class="toc-group-title">
+          <span class="ti">${group.icon}</span>
+          <span>${esc(group.title)}</span>
+          ${group.report ? '' : '<span class="toc-tag">不导出</span>'}
+        </div>
+        <ol class="toc-sublist"></ol>
+      `;
+      const sublist = $('.toc-sublist', groupEl);
+
+      group.items.forEach(([id, title, icon]) => {
+        const num = group.report ? String(++reportIndex) : '参';
+        const li = el('li', { class: 'toc-subitem' }, `
+          <a href="#sec-${id}" data-target="sec-${id}">
+            <span class="toc-num">${esc(num)}</span>
+            <span class="ti">${icon}</span>
+            <span>${esc(title)}</span>
+          </a>
+        `);
+        sublist.appendChild(li);
+
+        if (group.report) {
+          const sec = el('section', { id: `sec-${id}`, class: 'r-card', 'data-sec': id });
+          sec.innerHTML = `<h2><span class="num">${reportIndex}</span>${esc(title)}</h2>` + renderSectionBody(id, r, form);
+          main.appendChild(sec);
+        }
+      });
+
+      tocList.appendChild(groupEl);
     });
+
+    referenceArea.innerHTML = renderReferenceArea(r, form);
 
     bindScrollSpy();
     bindTocClick();
@@ -129,9 +202,7 @@
       case 'week':     return secWeek(r, form);
       case 'meals':    return secMeals(r, form);
       case 'recipes':  return secRecipes(r, form);
-      case 'workout-nutrition': return secWorkoutNut(r, form);
-      case 'cooking':  return secCooking(r);
-      case 'water':    return secWater(r, form);
+      case 'guidelines': return secGuidelines(r, form);
       case 'supps':    return secSupps(r, form);
       case 'eatout':   return secEatout();
       case 'recovery': return secRecovery();
@@ -266,6 +337,22 @@
       + block('晚餐方案', R.last);
   }
 
+  function secGuidelines(r, form) {
+    return `
+      <div class="subsec">
+        <h3>训练营养</h3>
+        ${secWorkoutNut(r, form)}
+      </div>
+      <div class="subsec">
+        <h3>烹饪规则</h3>
+        ${secCooking(r)}
+      </div>
+      <div class="subsec">
+        <h3>水合补给</h3>
+        ${secWater(r, form)}
+      </div>`;
+  }
+
   function secWorkoutNut(r) {
     const W = window.WORKOUT_NUTRITION;
     const card = w => `<div class="recipe">
@@ -333,6 +420,27 @@
       <ul class="tight">${P.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`;
   }
 
+  function renderReferenceArea(r, form) {
+    if (!REFERENCE_GROUP) return '';
+    const details = REFERENCE_GROUP.items.map(([id, title, icon]) => `
+      <details class="ref-detail" id="sec-${id}" data-sec="${id}">
+        <summary>
+          <span class="ti">${icon}</span>
+          <span>${esc(title)}</span>
+        </summary>
+        <div class="ref-body">${renderSectionBody(id, r, form)}</div>
+      </details>
+    `).join('');
+    return `
+      <div class="ref-head">
+        <div>
+          <h2>参考资料</h2>
+          <p>以下内容为补充参考，不纳入报告导出。</p>
+        </div>
+      </div>
+      <div class="ref-list">${details}</div>`;
+  }
+
   // —— 滚动监听 + TOC 高亮
   let _spy;
   function bindScrollSpy() {
@@ -347,16 +455,20 @@
           if (a) a.classList.add('active');
         }
       });
-    }, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
-    document.querySelectorAll('#report-main > section').forEach(s => _spy.observe(s));
+    }, { rootMargin: '-25% 0px -60% 0px', threshold: 0 });
+    document.querySelectorAll('#report-main > section, #reference-area > .ref-list > .ref-detail').forEach(s => _spy.observe(s));
   }
 
   function bindTocClick() {
-    document.querySelectorAll('#toc-list a').forEach(a => {
+    const links = [...document.querySelectorAll('#toc-list a')];
+    links.forEach(a => {
       a.addEventListener('click', e => {
         e.preventDefault();
         const id = a.dataset.target;
         const sec = document.getElementById(id);
+        links.forEach(link => link.classList.remove('active'));
+        a.classList.add('active');
+        if (sec && sec.tagName === 'DETAILS') sec.open = true;
         if (sec) sec.scrollIntoView({behavior:'smooth', block:'start'});
       });
     });
