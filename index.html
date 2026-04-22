@@ -1,51 +1,63 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="light">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover" />
 <meta name="theme-color" content="#0f766e" />
 <title>智能健身饮食方案</title>
-<link rel="stylesheet" href="assets/css/styles.css?v=8" />
+<link rel="stylesheet" href="assets/css/styles.css?v=10" />
 </head>
 <body>
 <main class="app">
   <header class="bar no-print">
-    <h1>智能健身饮食方案</h1>
-    <p>一段话生成专业方案 · 严格按《运动饮食指南》</p>
+    <div class="bar-text">
+      <h1 data-i18n="app_title">智能健身饮食方案</h1>
+      <p data-i18n="app_subtitle">一段话生成专业方案 · 严格按《运动饮食指南》</p>
+    </div>
+    <div class="bar-actions">
+      <button class="icon-btn" id="btn-lang" title="Switch Language / 切换语言" aria-label="切换语言">EN</button>
+      <button class="icon-btn" id="btn-qr" title="分享二维码" aria-label="分享">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="3" height="3"/><rect x="18" y="14" width="3" height="3"/><rect x="14" y="18" width="3" height="3"/><rect x="18" y="18" width="3" height="3"/></svg>
+      </button>
+      <button class="icon-btn" id="btn-theme" title="切换主题" aria-label="切换主题">
+        <svg id="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg id="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="display:none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      </button>
+    </div>
   </header>
 
   <section class="card no-print" id="input-card">
-    <textarea id="nl" rows="3" placeholder="例：男 32岁 178cm 78kg 体脂20% 想增肌 一周练4次"></textarea>
+    <textarea id="nl" rows="3" data-i18n-ph="nl_placeholder" placeholder="例：男 32岁 178cm 78kg 体脂20% 想增肌 一周练4次"></textarea>
     <div class="row gap8 mt8">
-      <button class="btn primary grow" id="btn-extract">智能抽取</button>
-      <button class="btn ghost" id="btn-clear">清空</button>
+      <button class="btn primary grow" id="btn-extract" data-i18n="btn_extract">智能抽取</button>
+      <button class="btn ghost" id="btn-clear" data-i18n="btn_clear">清空</button>
     </div>
     <div class="examples" id="chips"></div>
   </section>
 
   <section class="card no-print hidden" id="form-card">
     <div class="form-head">
-      <span class="dot"></span><b>核心参数</b>
+      <span class="dot"></span><b data-i18n="form_core">核心参数</b>
       <span class="muted ml-auto" id="confidence">—</span>
     </div>
     <div class="form-grid">
-      <label class="f"><span>性别</span>
-        <select id="sex"><option value="male">男</option><option value="female">女</option></select></label>
-      <label class="f"><span>年龄</span><input id="age" type="number" inputmode="numeric" min="10" max="99"/></label>
-      <label class="f"><span>身高 cm</span><input id="height" type="number" inputmode="numeric" min="120" max="220"/></label>
-      <label class="f"><span>体重 kg</span><input id="weight" type="number" inputmode="decimal" min="30" max="200" step="0.1"/></label>
-      <label class="f"><span>体脂 %（可选）</span><input id="bodyFat" type="number" inputmode="decimal" min="3" max="60" step="0.1"/></label>
-      <label class="f"><span>目标</span>
+      <label class="f"><span data-i18n="lbl_sex">性别</span>
+        <select id="sex"><option value="male" data-i18n="opt_male">男</option><option value="female" data-i18n="opt_female">女</option></select></label>
+      <label class="f"><span data-i18n="lbl_age">年龄</span><input id="age" type="number" inputmode="numeric" min="10" max="99"/></label>
+      <label class="f"><span data-i18n="lbl_height">身高 cm</span><input id="height" type="number" inputmode="numeric" min="120" max="220"/></label>
+      <label class="f"><span data-i18n="lbl_weight">体重 kg</span><input id="weight" type="number" inputmode="decimal" min="30" max="200" step="0.1"/></label>
+      <label class="f"><span data-i18n="lbl_body_fat">体脂 %（可选）</span><input id="bodyFat" type="number" inputmode="decimal" min="3" max="60" step="0.1"/></label>
+      <label class="f"><span data-i18n="lbl_goal">目标</span>
         <select id="goal">
-          <option value="bulk">增肌</option>
-          <option value="cut">减脂</option>
-          <option value="maintain">维持</option>
+          <option value="bulk" data-i18n="opt_bulk">增肌</option>
+          <option value="cut" data-i18n="opt_cut">减脂</option>
+          <option value="maintain" data-i18n="opt_maintain">维持</option>
         </select></label>
-      <label class="f"><span>活动水平</span>
+      <label class="f"><span data-i18n="lbl_activity">活动水平</span>
         <select id="activity"></select></label>
-      <label class="f"><span>每周训练 次</span>
+      <label class="f"><span data-i18n="lbl_freq">每周训练 次</span>
         <select id="freq">
-          <option value="">自动</option>
+          <option value="" data-i18n="opt_auto">自动</option>
           <option>1</option><option>2</option><option>3</option><option>4</option>
           <option>5</option><option>6</option><option>7</option>
         </select></label>
@@ -53,51 +65,76 @@
     <div class="pref-panels">
       <section class="pref-panel">
         <div class="pref-head">
-          <b>训练偏好</b>
-          <span class="muted">可多选，影响动作替换与有氧安排</span>
+          <b data-i18n="pref_train_title">训练偏好</b>
+          <span class="muted" data-i18n="pref_train_hint">可多选，影响动作替换与有氧安排</span>
         </div>
         <div class="check-grid">
-          <label class="check-chip"><input type="checkbox" name="trainingPref" value="home"><span>居家可练优先</span></label>
-          <label class="check-chip"><input type="checkbox" name="trainingPref" value="machine"><span>器械稳定优先</span></label>
-          <label class="check-chip"><input type="checkbox" name="trainingPref" value="cardio"><span>多一点有氧</span></label>
+          <label class="check-chip"><input type="checkbox" name="trainingPref" value="home"><span data-i18n="pref_home">居家可练优先</span></label>
+          <label class="check-chip"><input type="checkbox" name="trainingPref" value="machine"><span data-i18n="pref_machine">器械稳定优先</span></label>
+          <label class="check-chip"><input type="checkbox" name="trainingPref" value="cardio"><span data-i18n="pref_cardio">多一点有氧</span></label>
         </div>
       </section>
       <section class="pref-panel">
         <div class="pref-head">
-          <b>饮食偏好</b>
-          <span class="muted">可多选，影响食材轮换与推荐食谱</span>
+          <b data-i18n="pref_diet_title">饮食偏好</b>
+          <span class="muted" data-i18n="pref_diet_hint">可多选，影响食材轮换与推荐食谱</span>
         </div>
         <div class="check-grid">
-          <label class="check-chip"><input type="checkbox" name="dietPref" value="rice"><span>米饭/薯类主食</span></label>
-          <label class="check-chip"><input type="checkbox" name="dietPref" value="oat"><span>燕麦/面包主食</span></label>
-          <label class="check-chip"><input type="checkbox" name="dietPref" value="seafood"><span>海鲜优先</span></label>
-          <label class="check-chip"><input type="checkbox" name="dietPref" value="no_beef"><span>不吃牛肉</span></label>
-          <label class="check-chip"><input type="checkbox" name="dietPref" value="low_lactose"><span>低乳糖</span></label>
+          <label class="check-chip"><input type="checkbox" name="dietPref" value="rice"><span data-i18n="pref_rice">米饭/薯类主食</span></label>
+          <label class="check-chip"><input type="checkbox" name="dietPref" value="oat"><span data-i18n="pref_oat">燕麦/面包主食</span></label>
+          <label class="check-chip"><input type="checkbox" name="dietPref" value="seafood"><span data-i18n="pref_seafood">海鲜优先</span></label>
+          <label class="check-chip"><input type="checkbox" name="dietPref" value="no_beef"><span data-i18n="pref_no_beef">不吃牛肉</span></label>
+          <label class="check-chip"><input type="checkbox" name="dietPref" value="low_lactose"><span data-i18n="pref_low_lactose">低乳糖</span></label>
         </div>
       </section>
     </div>
-    <button class="btn primary block mt12" id="btn-gen">生成方案</button>
+    <button class="btn primary block mt12" id="btn-gen" data-i18n="btn_gen">生成方案</button>
   </section>
 
   <section id="report-wrap" class="hidden">
     <div class="actions no-print">
-      <button class="btn primary grow" id="btn-print">导出 PDF</button>
-      <button class="btn ghost grow" id="btn-png">保存图片</button>
-      <button class="btn ghost" id="btn-back">返回</button>
+      <button class="btn primary grow" id="btn-print" data-i18n="btn_print">导出 PDF</button>
+      <button class="btn ghost grow" id="btn-png" data-i18n="btn_png">保存图片</button>
+      <button class="btn ghost" id="btn-back" data-i18n="btn_back">返回</button>
     </div>
     <div id="report" class="report-layout"></div>
   </section>
 
-  <p class="footer no-print">数据本地缓存 · 纯前端 · 无追踪</p>
+  <p class="footer no-print" data-i18n="footer">数据本地缓存 · 纯前端 · 无追踪</p>
 </main>
 
-<script src="assets/js/data.js?v=8"></script>
-<script src="assets/js/training.js?v=8"></script>
-<script src="assets/js/recipes.js?v=8"></script>
-<script src="assets/js/extract.js?v=8"></script>
-<script src="assets/js/calc.js?v=8"></script>
-<script src="assets/js/render.js?v=8"></script>
-<script src="assets/js/app.js?v=8"></script>
+<!-- Info Modal -->
+<div id="info-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="info-title">
+  <div class="modal-box">
+    <button class="modal-close" id="info-close" aria-label="关闭">✕</button>
+    <h2 class="modal-title" id="info-title"></h2>
+    <div class="modal-body" id="info-content"></div>
+  </div>
+</div>
+
+<!-- QR Modal -->
+<div id="qr-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+  <div class="modal-box qr-box">
+    <button class="modal-close" id="qr-close" aria-label="关闭">✕</button>
+    <h2 class="modal-title" data-i18n="qr_title">分享链接</h2>
+    <div id="qr-canvas" class="qr-canvas"></div>
+    <p class="qr-hint" data-i18n="qr_scan">扫码打开本工具</p>
+    <div class="qr-url-row">
+      <span class="qr-url">https://tangjianfang.github.io/fitplan/</span>
+      <button class="btn ghost" id="btn-copy-url" data-i18n="qr_copy">复制链接</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/js/i18n.js?v=10"></script>
+<script src="assets/js/data.js?v=10"></script>
+<script src="assets/js/training.js?v=10"></script>
+<script src="assets/js/recipes.js?v=10"></script>
+<script src="assets/js/extract.js?v=10"></script>
+<script src="assets/js/calc.js?v=10"></script>
+<script src="assets/js/render.js?v=10"></script>
+<script src="assets/js/app.js?v=10"></script>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js" defer></script>
 </body>
 </html>

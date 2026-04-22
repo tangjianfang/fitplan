@@ -8,6 +8,8 @@
     return x;
   };
   const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  // i18n shortcut – falls back gracefully if i18n.js not loaded yet
+  const t = (k) => (window.t ? window.t(k) : k);
 
   function setChecks(name, values) {
     const picked = new Set(Array.isArray(values) ? values : []);
@@ -36,6 +38,13 @@
   function renderPrefBadges(title, values, labels) {
     if (!Array.isArray(values) || !values.length) return '';
     return `<div class="badge-row"><span class="bdg">${esc(title)}</span>${values.map((value) => `<span class="bdg ghost">${esc(labels[value] || value)}</span>`).join('')}</div>`;
+  }
+
+  function renderKcalList(items) {
+    return `<ul class="kcal-list">${items.map((raw) => {
+      const item = typeof raw === 'string' ? { text: raw, kcal: null } : raw;
+      return `<li><span>${esc(item.text)}</span>${item.kcal != null ? `<span class="item-kcal">${item.kcal} kcal</span>` : ''}</li>`;
+    }).join('')}</ul>`;
   }
 
   function renderForm(parsed) {
@@ -72,62 +81,61 @@
 
   function pct(part, total) { return total ? `${(part/total*100).toFixed(0)}%` : ''; }
 
-  const SECTION_GROUPS = [
-    {
-      id: 'overview',
-      title: '核心概览',
-      icon: '📊',
-      report: true,
-      items: [
-        ['assess', '身体评估', '👤'],
-        ['energy', '热量与营养', '🔥'],
-      ],
-    },
-    {
-      id: 'training-plan',
-      title: '训练方案',
-      icon: '🏋️',
-      report: true,
-      items: [
-        ['training', '训练计划', '🏋️'],
-        ['week', '周训练排程', '📅'],
-      ],
-    },
-    {
-      id: 'diet-plan',
-      title: '饮食方案',
-      icon: '🍱',
-      report: true,
-      items: [
-        ['meals', '每日餐次', '🍱'],
-        ['recipes', '推荐食谱', '👨‍🍳'],
-      ],
-    },
-    {
-      id: 'rules',
-      title: '执行规则',
-      icon: '🧭',
-      report: true,
-      items: [
-        ['guidelines', '训练/饮食执行细则', '🧭'],
-      ],
-    },
-    {
-      id: 'reference',
-      title: '参考资料',
-      icon: '📚',
-      report: false,
-      items: [
-        ['supps', '补剂参考', '💊'],
-        ['eatout', '外食与聚餐', '🍽️'],
-        ['recovery', '睡眠与恢复', '😴'],
-        ['plateau', '平台期 & 复盘', '📈'],
-      ],
-    },
-  ];
-  const REPORT_GROUPS = SECTION_GROUPS.filter(group => group.report);
-  const REPORT_SECTIONS = REPORT_GROUPS.flatMap(group => group.items.map(item => ({ groupId: group.id, groupTitle: group.title, id: item[0], title: item[1], icon: item[2] })));
-  const REFERENCE_GROUP = SECTION_GROUPS.find(group => !group.report);
+  function getSectionGroups() {
+    return [
+      {
+        id: 'overview',
+        title: t('grp_overview'),
+        icon: '📊',
+        report: true,
+        items: [
+          ['assess', t('sec_assess'), '👤'],
+          ['energy', t('sec_energy'), '🔥'],
+        ],
+      },
+      {
+        id: 'training-plan',
+        title: t('grp_training_plan'),
+        icon: '🏋️',
+        report: true,
+        items: [
+          ['training', t('sec_training'), '🏋️'],
+          ['week', t('sec_week'), '📅'],
+        ],
+      },
+      {
+        id: 'diet-plan',
+        title: t('grp_diet_plan'),
+        icon: '🍱',
+        report: true,
+        items: [
+          ['meals', t('sec_meals'), '🍱'],
+          ['recipes', t('sec_recipes'), '👨‍🍳'],
+        ],
+      },
+      {
+        id: 'rules',
+        title: t('grp_rules'),
+        icon: '🧭',
+        report: true,
+        items: [
+          ['guidelines', t('sec_guidelines'), '🧭'],
+        ],
+      },
+      {
+        id: 'reference',
+        title: t('grp_reference'),
+        icon: '📚',
+        report: false,
+        items: [
+          ['supps', t('sec_supps'), '💊'],
+          ['eatout', t('sec_eatout'), '🍽️'],
+          ['recovery', t('sec_recovery'), '😴'],
+          ['plateau', t('sec_plateau'), '📈'],
+        ],
+      },
+    ];
+  }
 
   function renderReport(form) {
     if (!form.sex || !form.age || !form.weightKg || !form.heightCm || !form.goal) {
@@ -135,10 +143,13 @@
     }
     const r = window.CALC.buildReport(form);
 
+    const SECTION_GROUPS = getSectionGroups();
+    const REFERENCE_GROUP = SECTION_GROUPS.find(group => !group.report);
+
     const wrap = $('#report');
     wrap.innerHTML = `
       <aside class="report-toc no-print" id="toc">
-        <div class="toc-title">方案目录</div>
+        <div class="toc-title">${t('toc_title')}</div>
         <ol id="toc-list"></ol>
       </aside>
       <div class="report-column">
@@ -157,7 +168,7 @@
         <div class="toc-group-title">
           <span class="ti">${group.icon}</span>
           <span>${esc(group.title)}</span>
-          ${group.report ? '' : '<span class="toc-tag">不导出</span>'}
+          ${group.report ? '' : `<span class="toc-tag">${esc(t('toc_no_export'))}</span>`}
         </div>
         <ol class="toc-sublist"></ol>
       `;
@@ -184,7 +195,7 @@
       tocList.appendChild(groupEl);
     });
 
-    referenceArea.innerHTML = renderReferenceArea(r, form);
+    referenceArea.innerHTML = renderReferenceArea(r, form, REFERENCE_GROUP);
 
     bindScrollSpy();
     bindTocClick();
@@ -211,55 +222,100 @@
     return '';
   }
 
+  function infoBtn(key, dataset) {
+    const attrs = Object.entries(dataset).map(([k,v]) => `data-${k}="${esc(String(v||''))}"`).join(' ');
+    return `<button class="info-btn" data-info="${key}" ${attrs} aria-label="说明">?</button>`;
+  }
+
+  function bmiColorClass(cat) {
+    if (!cat) return '';
+    const c = cat.toLowerCase();
+    if (c.includes('偏瘦') || c.includes('under')) return 'val-under';
+    if (c.includes('正常') || c.includes('normal')) return 'val-normal';
+    if (c.includes('超重') || c.includes('over')) return 'val-over';
+    return 'val-obese';
+  }
+
   function secAssess(r, form) {
+    const guide = r.progress;
+    const bmi = r.bmi;
+    const bmiCls = bmiColorClass(bmi?.cat);
+    const bmiGauge = window._APP_CHARTS ? window._APP_CHARTS.bmiGaugeSvg(bmi?.value ?? null) : '';
     return `
       <div class="kv">
-        <div class="stat"><div class="lbl">${form.sex==='male'?'男':'女'} · ${form.age} 岁</div><div class="val">${form.heightCm}/${form.weightKg}</div><div class="sub">cm / kg</div></div>
-        <div class="stat"><div class="lbl">BMI</div><div class="val">${r.bmi?.value ?? '—'}</div><div class="sub">${r.bmi?.cat ?? ''}</div></div>
-        <div class="stat"><div class="lbl">BMR</div><div class="val">${r.bmr}</div><div class="sub">kcal · 静息代谢</div></div>
-        <div class="stat"><div class="lbl">TDEE</div><div class="val brand">${r.tdee}</div><div class="sub">×${r.activity.factor} ${esc(r.activity.name)}</div></div>
-        ${r.leanMassKg!=null ? `<div class="stat"><div class="lbl">瘦体重 / 脂肪</div><div class="val">${r.leanMassKg}/${r.fatMassKg}</div><div class="sub">kg · 体脂 ${form.bodyFatPct}%</div></div>` : ''}
-      </div>`;
+        <div class="stat"><div class="lbl">${t(form.sex==='male'?'opt_male':'opt_female')} · ${form.age} 岁</div><div class="val">${form.heightCm}/${form.weightKg}</div><div class="sub">cm / kg</div></div>
+        <div class="stat"><div class="lbl">BMI ${infoBtn('bmi',{bmiVal:bmi?.value??''})}</div><div class="val ${bmiCls}">${bmi?.value ?? '—'}</div><div class="sub">${esc(bmi?.cat ?? '')}</div></div>
+        <div class="stat"><div class="lbl">BMR ${infoBtn('bmr',{})}</div><div class="val">${r.bmr}</div><div class="sub">kcal · 静息代谢</div></div>
+        <div class="stat"><div class="lbl">TDEE ${infoBtn('tdee',{})}</div><div class="val brand">${r.tdee}</div><div class="sub">×${r.activity.factor} ${esc(r.activity.name)}</div></div>
+        ${r.leanMassKg!=null ? `<div class="stat"><div class="lbl">${t('lbl_lean_fat')} ${infoBtn('bf',{bfPct:form.bodyFatPct??'',sex:form.sex||'male'})}</div><div class="val">${r.leanMassKg}/${r.fatMassKg}</div><div class="sub">kg · ${t('unit_lean')} ${form.bodyFatPct}%</div></div>` : ''}
+        <div class="stat"><div class="lbl">${t('lbl_healthy_range')} ${infoBtn('hw',{})}</div><div class="val">${guide.healthy.low}-${guide.healthy.high}</div><div class="sub">kg · ${t('unit_bmi_range')}</div></div>
+        <div class="stat"><div class="lbl">${esc(guide.actionLabel)}</div><div class="val brand">${esc(guide.actionValue)}</div><div class="sub">${esc(guide.actionSub)}</div></div>
+        <div class="stat"><div class="lbl">${esc(guide.paceLabel)}</div><div class="val">${esc(guide.paceValue)}</div><div class="sub">${esc(guide.paceSub)}</div></div>
+      </div>
+      ${bmiGauge}
+      <ul class="tight">${guide.notes.map((note) => `<li>${esc(note)}</li>`).join('')}</ul>`;
   }
 
   function secEnergy(r, form) {
-    const goalLabel = {bulk:'增肌', cut:'减脂', maintain:'维持'}[form.goal];
+    const goalLabel = {bulk:t('opt_bulk'), cut:t('opt_cut'), maintain:t('opt_maintain')}[form.goal];
     const ratioLabel = window.MACRO_RATIOS[form.goal].label;
     const M = r.macros, kcal = r.target.kcal;
+    const diff = kcal - r.tdee;
+    const isDeficit = diff < 0;
+    const fillPct = Math.min(100, Math.max(4, Math.abs(diff) / Math.max(1,r.tdee) * 100 * 4)).toFixed(1);
+    const fillClass = diff > 50 ? 'surplus' : diff < -50 ? 'deficit' : 'neutral';
+    const macroBars = [
+      { label: t('lbl_carb'),    g: M.carbG,    kcal: M.carbKcal,    color:'#f59e0b', p: pct(M.carbKcal, kcal) },
+      { label: t('lbl_protein'), g: M.proteinG, kcal: M.proteinKcal, color:'#3b82f6', p: pct(M.proteinKcal, kcal) },
+      { label: t('lbl_fat'),     g: M.fatG,     kcal: M.fatKcal,     color:'#a78bfa', p: pct(M.fatKcal, kcal) },
+    ];
+    const macroBarRows = macroBars.map(mb => `
+      <div class="macro-bar-row">
+        <span class="lbl">${esc(mb.label)} ${mb.p}</span>
+        <div class="macro-bar-track"><div class="macro-bar-fill" style="width:${mb.p};background:${mb.color}"></div></div>
+        <span class="val">${mb.g}<span class="muted" style="font-size:11px"> g</span></span>
+      </div>`).join('');
+    const macroPieChart = window._APP_CHARTS ? window._APP_CHARTS.macroPieSvg(M.carbG, M.proteinG, M.fatG) : '';
     return `
       <div class="kv">
-        <div class="stat"><div class="lbl">每日目标 · ${goalLabel}</div><div class="val brand">${kcal}</div><div class="sub">kcal</div></div>
-        <div class="stat"><div class="lbl">相较 TDEE</div><div class="val">${kcal>r.tdee?'+':''}${kcal - r.tdee}</div><div class="sub">kcal</div></div>
-        <div class="stat"><div class="lbl">膳食纤维</div><div class="val">${r.fiber.min}${r.fiber.max!==r.fiber.min?'–'+r.fiber.max:''}</div><div class="sub">g/日</div></div>
+        <div class="stat"><div class="lbl">${t('lbl_daily_target')} · ${goalLabel}</div><div class="val brand">${kcal}</div><div class="sub">kcal</div></div>
+        <div class="stat"><div class="lbl">${t('lbl_vs_tdee')}</div><div class="val ${diff>=0?'val-normal':'val-over'}">${diff>=0?'+':''}${diff}</div><div class="sub">kcal</div></div>
+        <div class="stat"><div class="lbl">${t('lbl_fiber')}</div><div class="val">${r.fiber.min}${r.fiber.max!==r.fiber.min?'–'+r.fiber.max:''}</div><div class="sub">g/日</div></div>
       </div>
-      <h3>三大营养素 · ${ratioLabel}</h3>
-      <div class="kv">
-        <div class="stat"><div class="lbl">碳水 ${pct(M.carbKcal,kcal)}</div><div class="val">${M.carbG}<span class="muted" style="font-size:12px;font-weight:400"> g</span></div><div class="sub">${M.carbKcal} kcal</div></div>
-        <div class="stat"><div class="lbl">蛋白 ${pct(M.proteinKcal,kcal)}</div><div class="val">${M.proteinG}<span class="muted" style="font-size:12px;font-weight:400"> g</span></div><div class="sub">${M.proteinKcal} kcal</div></div>
-        <div class="stat"><div class="lbl">脂肪 ${pct(M.fatKcal,kcal)}</div><div class="val">${M.fatG}<span class="muted" style="font-size:12px;font-weight:400"> g</span></div><div class="sub">${M.fatKcal} kcal</div></div>
+      <div class="cal-balance">
+        <div class="cal-balance-label"><span>TDEE ${r.tdee} kcal</span><span>目标 ${kcal} kcal (${isDeficit?'缺额':'盈余'} ${Math.abs(diff)} kcal)</span></div>
+        <div class="cal-balance-track"><div class="cal-balance-fill ${fillClass}" style="width:${fillPct}%"></div></div>
       </div>
+      <h3>${t('h3_macros')} · ${ratioLabel} ${infoBtn('macros',{carbG:M.carbG,proteinG:M.proteinG,fatG:M.fatG})}</h3>
+      <div class="macro-bars">${macroBarRows}</div>
+      ${macroPieChart}
       <ul class="tight">${r.target.notes.map(n=>`<li>${esc(n)}</li>`).join('')}</ul>`;
   }
 
   function secTraining(r, form) {
     const tp = r.trainingPlan;
     const note = r.training.map(x=>`<li>${esc(x)}</li>`).join('');
+    const avgBurn = Math.round(tp.weeklyBurnKcal / Math.max(1, tp.days.length));
     return `
       <div class="badge-row">
-        <span class="bdg">${tp.freq} 天/周</span>
+        <span class="bdg">${tp.freq} ${t('lbl_days_week')}</span>
         <span class="bdg brand">${esc(tp.splitName)}</span>
         <span class="bdg ghost">组间 ${tp.tune.restDelta>=0?'+':''}${tp.tune.restDelta}s · 训练量 ${tp.tune.setsDelta>=0?'+':''}${tp.tune.setsDelta} 组</span>
       </div>
       ${renderPrefBadges('训练偏好', r.preferences.training, TRAIN_PREF_LABELS)}
+      <div class="kv training-kv">
+        <div class="stat"><div class="lbl">${t('lbl_avg_burn')} ${infoBtn('burn',{})}</div><div class="val brand">${avgBurn}</div><div class="sub">${t('lbl_kcal_per')}</div></div>
+        <div class="stat"><div class="lbl">${t('lbl_weekly_burn')}</div><div class="val">${tp.weeklyBurnKcal}</div><div class="sub">${t('lbl_kcal_wk')}</div></div>
+      </div>
       <p class="muted" style="margin:6px 0 10px">${esc(tp.splitDesc)}</p>
-      <h3>训练原则</h3>
+      <h3>${t('h3_train_principle')}</h3>
       <ul class="tight">${note}</ul>
-      <h3>渐进超负荷（每周递增）</h3>
+      <h3>${t('h3_progressive')}</h3>
       <ul class="tight">
-        <li><b>力量主项</b>：完成全部目标次数 → 下次 +2.5 kg（小肌群 +1 kg）</li>
-        <li><b>辅助孤立</b>：先加次数到上限，再加重量（12 次满 → 加重重新从 8 次开始）</li>
-        <li><b>RPE 控制</b>：主项 RPE 7-8（留 2-3 次预备），最后一组可冲到 RPE 9</li>
-        <li><b>减载周</b>：每 6-8 周安排 1 周减半训练量（同重量、组数减半）</li>
+        <li>${t('tip_main_lift')}</li>
+        <li>${t('tip_accessory')}</li>
+        <li>${t('tip_rpe')}</li>
+        <li>${t('tip_deload')}</li>
       </ul>`;
   }
 
@@ -268,7 +324,7 @@
     const days = tp.days.map((d) => {
       if (d.sessionId === 'cardio') {
         return `<div class="day-card">
-          <div class="day-head"><b>${esc(d.weekday)} · ${esc(d.title)}</b><span class="muted">约 ${d.minutes} min</span></div>
+          <div class="day-head"><b>${esc(d.weekday)} · ${esc(d.title)}</b><span class="muted">约 ${d.minutes} min · ≈ ${d.burnKcal} kcal</span></div>
           <div class="muted" style="margin-top:6px">${esc(d.cardio)}</div>
         </div>`;
       }
@@ -282,28 +338,28 @@
       return `<div class="day-card">
         <div class="day-head">
           <b>${esc(d.weekday)} · ${esc(d.title)}</b>
-          <span class="muted">${d.totalSets} 组 · 约 ${d.minutes} min</span>
+          <span class="muted">${d.totalSets} 组 · 约 ${d.minutes} min · ≈ ${d.burnKcal} kcal</span>
         </div>
         <details class="day-detail" open>
-          <summary class="muted">展开/收起</summary>
-          <h4>① 热身 5-10 min</h4>
+          <summary class="muted">${t('lbl_expand_collapse')}</summary>
+          <h4>${t('lbl_warmup')}</h4>
           <ul class="tight">${d.warmup.map(w=>`<li>${esc(w)}</li>`).join('')}</ul>
-          <h4>② 主训练</h4>
+          <h4>${t('lbl_main_train')}</h4>
           <table class="tbl">
-            <thead><tr><th>#</th><th>动作</th><th>组×次</th><th>休息</th></tr></thead>
+            <thead><tr><th>${t('tbl_no')}</th><th>${t('tbl_ex')}</th><th>${t('tbl_sets')}</th><th>${t('tbl_rest')}</th></tr></thead>
             <tbody>${exHtml}</tbody>
           </table>
-          <h4>③ 有氧</h4>
+          <h4>${t('lbl_cardio_sec')}</h4>
           <p class="muted" style="margin:6px 0">${esc(d.cardio)}</p>
-          <h4>④ 放松拉伸 5-10 min</h4>
+          <h4>${t('lbl_cooldown')}</h4>
           <ul class="tight">${d.cooldown.map(w=>`<li>${esc(w)}</li>`).join('')}</ul>
         </details>
       </div>`;
     }).join('');
     return `
       <div class="badge-row">
-        <span class="bdg">高强度日间隔 ≥48h</span>
-        <span class="bdg ghost">训练前后留 30 min 餐</span>
+        <span class="bdg">${t('note_gap')}</span>
+        <span class="bdg ghost">${t('note_meal_timing')}</span>
       </div>
       <div class="day-grid">${days}</div>`;
   }
@@ -313,10 +369,10 @@
       <div class="meal">
         <h4><span>${esc(m.name)}</span><span class="kcal">${m.kcal} kcal</span></h4>
         <div class="meta">碳水 ${m.carbG} g · 蛋白 ${m.proteinG} g · 脂肪 ${m.fatG} g</div>
-        <ul>${m.foods.map(f=>`<li>${esc(f)}</li>`).join('')}</ul>
+        ${renderKcalList(m.foods)}
         ${m.tip ? `<div class="note">${esc(m.tip)}</div>` : ''}
       </div>`).join('') + `
-      <div class="note">练后餐摄入最多；早餐次之；末餐最少且应在睡前 2 小时吃完${form.goal==='cut'?'，减脂期末餐尽量不摄入碳水':''}。</div>`;
+      <div class="note">${t('note_meals_main')}${form.goal==='cut'?t('note_meals_cut'):''}。</div>`;
   }
 
   function secRecipes(r, form) {
@@ -326,29 +382,29 @@
       <div class="recipe-grid">
         ${list.map(rc => `
           <div class="recipe">
-            <div class="r-name">${esc(rc.name)}</div>
-            <ul class="tight">${rc.items.map(i=>`<li>${esc(i)}</li>`).join('')}</ul>
+            <div class="r-head"><div class="r-name">${esc(rc.name)}</div>${rc.kcal != null ? `<span class="item-kcal">约 ${rc.kcal} kcal</span>` : ''}</div>
+            ${renderKcalList(rc.itemsDetailed || rc.items.map((text) => ({ text, kcal: null })))}
             <div class="note">${esc(rc.how)}</div>
           </div>`).join('')}
       </div>`;
     return renderPrefBadges('饮食偏好', r.preferences.diet, DIET_PREF_LABELS)
-      + block('早餐方案', R.early)
-      + block('练后餐方案', R.post)
-      + block('晚餐方案', R.last);
+      + block(t('lbl_breakfast_r'), R.early)
+      + block(t('lbl_post_r'), R.post)
+      + block(t('lbl_dinner_r'), R.last);
   }
 
   function secGuidelines(r, form) {
     return `
       <div class="subsec">
-        <h3>训练营养</h3>
+        <h3>${t('h3_workout_nut')}</h3>
         ${secWorkoutNut(r, form)}
       </div>
       <div class="subsec">
-        <h3>烹饪规则</h3>
+        <h3>${t('h3_cooking')}</h3>
         ${secCooking(r)}
       </div>
       <div class="subsec">
-        <h3>水合补给</h3>
+        <h3>${t('h3_water')}</h3>
         ${secWater(r, form)}
       </div>`;
   }
@@ -359,7 +415,7 @@
       <div class="r-name">${esc(w.title)}</div>
       <ul class="tight">${w.items.map(i=>`<li>${esc(i)}</li>`).join('')}</ul></div>`;
     return `<div class="recipe-grid">${card(W.pre)}${card(W.intra)}${card(W.post)}</div>
-      <div class="note">水：训前 2h 饮 ${r.water.preLo}-${r.water.preHi} ml；训中 ≤${r.water.midMaxPerHour} ml/h。</div>`;
+      <div class="note">${t('note_pre_water')} ${r.water.preLo}-${r.water.preHi} ${t('note_mid_water_sep')}${r.water.midMaxPerHour} ${t('note_mid_water_end')}</div>`;
   }
 
   function secCooking(r) {
@@ -375,15 +431,15 @@
   function secWater(r, form) {
     return `
       <div class="kv">
-        <div class="stat"><div class="lbl">日基础饮水</div><div class="val">${Math.round(form.weightKg*35)}</div><div class="sub">ml · 35 ml/kg</div></div>
-        <div class="stat"><div class="lbl">训前 2h</div><div class="val">${r.water.preLo}-${r.water.preHi}</div><div class="sub">ml · 3-5 ml/kg</div></div>
-        <div class="stat"><div class="lbl">训中</div><div class="val">≤${r.water.midMaxPerHour}</div><div class="sub">ml/h · 少量多次</div></div>
-        <div class="stat"><div class="lbl">训后 6h</div><div class="val">×140%</div><div class="sub">补充流失体重</div></div>
+        <div class="stat"><div class="lbl">${t('water_lbl_day')}</div><div class="val">${Math.round(form.weightKg*35)}</div><div class="sub">${t('water_sub_day')}</div></div>
+        <div class="stat"><div class="lbl">${t('water_lbl_pre')}</div><div class="val">${r.water.preLo}-${r.water.preHi}</div><div class="sub">${t('water_sub_pre')}</div></div>
+        <div class="stat"><div class="lbl">${t('water_lbl_mid')}</div><div class="val">≤${r.water.midMaxPerHour}</div><div class="sub">${t('water_sub_mid')}</div></div>
+        <div class="stat"><div class="lbl">${t('water_lbl_post')}</div><div class="val">×140%</div><div class="sub">${t('water_sub_post')}</div></div>
       </div>
       <ul class="tight">
-        <li>清水为主；训中 >60 min 可加电解质</li>
-        <li>每天咖啡因 ≤400 mg（约 2-3 杯美式）</li>
-        <li>少喝含糖饮料、果汁；含酒精饮料按 7 kcal/g 计入热量</li>
+        <li>${t('water_tip1')}</li>
+        <li>${t('water_tip2')}</li>
+        <li>${t('water_tip3')}</li>
       </ul>`;
   }
 
@@ -391,12 +447,12 @@
     const list = window.SUPPLEMENTS.filter(s => s.goal === 'all' || s.goal.includes(form.goal));
     return `
       <table class="tbl">
-        <thead><tr><th>补剂</th><th>用法</th><th>剂量</th><th>证据</th></tr></thead>
+        <thead><tr><th>${t('tbl_supp')}</th><th>${t('tbl_use')}</th><th>${t('tbl_dose')}</th><th>${t('tbl_evidence')}</th></tr></thead>
         <tbody>${list.map(s=>`<tr>
           <td><b>${esc(s.name)}</b></td><td>${esc(s.use)}</td><td>${esc(s.dose)}</td><td>${esc(s.evidence)}</td>
         </tr>`).join('')}</tbody>
       </table>
-      <div class="note">补剂 ≠ 必需。优先做好饮食、训练、睡眠；任何补剂都需查看自己的体检指标与药物相互作用。</div>`;
+      <div class="note">${t('note_supps')}</div>`;
   }
 
   function secEatout() {
@@ -414,13 +470,13 @@
   function secPlateau(r, form) {
     const P = window.PLATEAU_TIPS[form.goal] || window.PLATEAU_TIPS.maintain;
     return `
-      <h3>每月复盘</h3>
+      <h3>${t('h3_monthly')}</h3>
       <ul class="tight">${r.adjust.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>
-      <h3>平台期与策略</h3>
+      <h3>${t('h3_plateau')}</h3>
       <ul class="tight">${P.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`;
   }
 
-  function renderReferenceArea(r, form) {
+  function renderReferenceArea(r, form, REFERENCE_GROUP) {
     if (!REFERENCE_GROUP) return '';
     const details = REFERENCE_GROUP.items.map(([id, title, icon]) => `
       <details class="ref-detail" id="sec-${id}" data-sec="${id}">
@@ -434,8 +490,8 @@
     return `
       <div class="ref-head">
         <div>
-          <h2>参考资料</h2>
-          <p>以下内容为补充参考，不纳入报告导出。</p>
+          <h2>${t('ref_title')}</h2>
+          <p>${t('ref_not_exported')}</p>
         </div>
       </div>
       <div class="ref-list">${details}</div>`;
