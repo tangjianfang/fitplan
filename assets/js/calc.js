@@ -124,6 +124,122 @@
     return { value: +v.toFixed(1), cat };
   }
 
+  const HEALTHY_BMI_RANGE = { min: 18.5, max: 23.9 };
+  const GOAL_BODY_FAT_RANGE = {
+    male: {
+      cut: [12, 16],
+      maintain: [14, 18],
+      bulk: [13, 17],
+    },
+    female: {
+      cut: [20, 24],
+      maintain: [22, 27],
+      bulk: [21, 26],
+    },
+  };
+
+  function round1(v) { return +v.toFixed(1); }
+
+  function healthyWeightRange(heightCm) {
+    const h2 = Math.pow(heightCm / 100, 2);
+    return {
+      low: round1(HEALTHY_BMI_RANGE.min * h2),
+      high: round1(HEALTHY_BMI_RANGE.max * h2),
+    };
+  }
+
+  function bodyFatWeightRange(leanMassKg, range) {
+    if (!leanMassKg || !range) return null;
+    return {
+      low: round1(leanMassKg / (1 - range[0] / 100)),
+      high: round1(leanMassKg / (1 - range[1] / 100)),
+    };
+  }
+
+  function formatRange(low, high, unit='') {
+    if (low == null || high == null) return '—';
+    const tail = unit ? ` ${unit}` : '';
+    return low === high ? `${low}${tail}` : `${low}-${high}${tail}`;
+  }
+
+  function buildProgressGuide({ sex, heightCm, weightKg, goal, bodyFatPct, leanMassKg }) {
+    const healthy = healthyWeightRange(heightCm);
+    const bfRange = GOAL_BODY_FAT_RANGE[sex]?.[goal] || GOAL_BODY_FAT_RANGE[sex]?.maintain || null;
+    const bfWeight = bodyFatWeightRange(leanMassKg, bfRange);
+
+    let targetRange = { ...healthy };
+    if (goal === 'cut' && bfWeight) {
+      const low = Math.max(healthy.low, Math.min(bfWeight.low, bfWeight.high));
+      const high = Math.min(healthy.high, Math.max(bfWeight.low, bfWeight.high));
+      targetRange = low <= high ? { low: round1(low), high: round1(high) } : { ...healthy };
+    } else if (goal === 'maintain' && bfWeight) {
+      const low = Math.max(healthy.low, Math.min(bfWeight.low, bfWeight.high));
+      const high = Math.min(healthy.high, Math.max(bfWeight.low, bfWeight.high));
+      targetRange = low <= high ? { low: round1(low), high: round1(high) } : { ...healthy };
+    } else if (goal === 'bulk' && bfWeight) {
+      targetRange = {
+        low: round1(Math.min(bfWeight.low, bfWeight.high)),
+        high: round1(Math.max(bfWeight.low, bfWeight.high)),
+      };
+    }
+
+    const notes = [
+      `健康体重参考 ${formatRange(healthy.low, healthy.high, 'kg')}（BMI ${HEALTHY_BMI_RANGE.min}-${HEALTHY_BMI_RANGE.max}）`,
+    ];
+    if (bodyFatPct != null && bfRange && bfWeight) {
+      notes.push(`按 ${sex === 'male' ? '男性' : '女性'} ${goal === 'cut' ? '减脂' : goal === 'bulk' ? '增肌' : '维持'}可持续体脂 ${bfRange[0]}-${bfRange[1]}%，体重大致会落在 ${formatRange(targetRange.low, targetRange.high, 'kg')}`);
+    }
+
+    if (goal === 'cut') {
+      const minLoss = round1(Math.max(0, weightKg - targetRange.high));
+      const maxLoss = round1(Math.max(0, weightKg - targetRange.low));
+      const weeklyLoss = round1(Math.min(0.5, weightKg * C.MAX_WEEKLY_FAT_LOSS_RATIO));
+      const weeksLow = minLoss > 0 ? Math.ceil(minLoss / weeklyLoss) : 0;
+      const weeksHigh = maxLoss > 0 ? Math.ceil(maxLoss / weeklyLoss) : 0;
+      if (maxLoss > 0) notes.push(`更建议先减到 ${formatRange(targetRange.low, targetRange.high, 'kg')}，大约需要减少 ${formatRange(minLoss, maxLoss, 'kg')}`);
+      else notes.push('当前体重已接近建议区间，重点放在体脂、围度和训练质量。');
+      return {
+        healthy, bfRange, bfWeight, targetRange,
+        actionLabel: '建议先减重',
+        actionValue: maxLoss > 0 ? formatRange(minLoss, maxLoss, 'kg') : '0-2 kg',
+        actionSub: maxLoss > 0 ? `先回到 ${formatRange(targetRange.low, targetRange.high, 'kg')}` : '无需大幅减重，优先减脂提质',
+        paceLabel: '合理速度',
+        paceValue: maxLoss > 0 ? formatRange(weeksLow, weeksHigh, '周') : '维持当前',
+        paceSub: `按每周 ${weeklyLoss} kg 减重更稳妥`,
+        notes,
+      };
+    }
+
+    if (goal === 'bulk') {
+      const monthlyGain = round1(weightKg * window.LEAN_GAIN_RATE(weightKg));
+      notes.push(`干净增肌更建议控制在每月 +${monthlyGain} kg 左右，过快更容易转成脂肪。`);
+      return {
+        healthy, bfRange, bfWeight, targetRange,
+        actionLabel: '建议增速',
+        actionValue: `${monthlyGain} kg/月`,
+        actionSub: '慢增肌优先，减少脂肪连带增长',
+        paceLabel: '季度上限',
+        paceValue: `${round1(monthlyGain * 3)} kg`,
+        paceSub: '先看力量、围度和镜子反馈，不只看体重',
+        notes,
+      };
+    }
+
+    const toHealthy = weightKg > targetRange.high ? round1(weightKg - targetRange.high) : weightKg < targetRange.low ? round1(targetRange.low - weightKg) : 0;
+    if (toHealthy > 0) notes.push(`若想进入更舒服的健康区间，可把体重调整约 ${toHealthy} kg。`);
+    else notes.push('当前体重已在建议区间内，重点看围度、体脂和训练恢复。');
+    return {
+      healthy, bfRange, bfWeight, targetRange,
+      actionLabel: '建议维持区间',
+      actionValue: formatRange(targetRange.low, targetRange.high, 'kg'),
+      actionSub: '体重周波动 ±1 kg 通常都属正常',
+      paceLabel: '跟踪重点',
+      paceValue: bodyFatPct != null ? `${bodyFatPct}% 体脂` : `${weightKg} kg`,
+      paceSub: '每周固定 1-2 次称重，配合腰围/镜子更有意义',
+      notes,
+    };
+  }
+
   function normalizePrefs(form) {
     return {
       training: Array.isArray(form.trainingPrefs) ? form.trainingPrefs : [],
@@ -166,16 +282,16 @@
   // 食物推荐：每餐按目标三大量精准反算 + 餐间食材轮换 + 单一食材量过大时自动拆分
   // 餐次轮换池
   const PROTEIN_ROTATION = {
-    cut:  [['鸡胸肉'], ['龙利鱼','巴沙鱼'], ['虾','鳕鱼'], ['牛腱子肉'], ['去皮鸡腿肉']],
-    bulk: [['鸡胸肉'], ['瘦牛肉(牛里脊)'], ['三文鱼'], ['瘦猪肉(猪里脊)'], ['去皮鸡腿肉']],
-    maintain: [['鸡胸肉'], ['瘦牛肉(牛里脊)'], ['龙利鱼','巴沙鱼'], ['虾'], ['去皮鸡腿肉']],
+    cut:  [['鸡胸肉'], ['龙利鱼'], ['巴沙鱼'], ['虾'], ['鳕鱼'], ['牛腱子肉'], ['去皮鸡腿肉'], ['去皮鸭胸肉'], ['三文鱼']],
+    bulk: [['鸡胸肉'], ['瘦牛肉(牛里脊)'], ['三文鱼'], ['瘦猪肉(猪里脊)'], ['去皮鸡腿肉'], ['去皮鸭胸肉'], ['龙利鱼'], ['鳕鱼']],
+    maintain: [['鸡胸肉'], ['瘦牛肉(牛里脊)'], ['龙利鱼'], ['虾'], ['去皮鸡腿肉'], ['去皮鸭胸肉'], ['瘦猪肉(猪里脊)'], ['巴沙鱼']],
   };
   const CARB_ROTATION = {
-    cut:  [['燕麦粥'], ['糙米饭','熟'], ['紫薯蒸','蒸'], ['土豆蒸','蒸'], ['全麦面包']],
-    bulk: [['白米饭','熟'], ['全麦面包'], ['糙米饭','熟'], ['馒头'], ['土豆蒸','蒸']],
-    maintain: [['糙米饭','熟'], ['白米饭','熟'], ['全麦馒头'], ['红薯蒸','蒸'], ['燕麦粥']],
+    cut:  [['燕麦粥','熟'], ['糙米饭','熟'], ['紫薯蒸','熟'], ['土豆蒸','熟'], ['全麦面包','熟'], ['玉米水煮','熟']],
+    bulk: [['白米饭','熟'], ['全麦面包','熟'], ['糙米饭','熟'], ['馒头','熟'], ['土豆蒸','熟'], ['玉米水煮','熟']],
+    maintain: [['糙米饭','熟'], ['白米饭','熟'], ['全麦馒头','熟'], ['红薯蒸','熟'], ['燕麦粥','熟'], ['玉米水煮','熟']],
   };
-  const VEG_ROTATION = ['西兰花','菠菜','番茄','青椒','黄瓜','生菜','油麦菜','金针菇'];
+  const VEG_ROTATION = ['西兰花','菠菜','番茄','青椒','黄瓜','生菜','油麦菜','金针菇','杏鲍菇','冬瓜','芹菜','娃娃菜'];
 
   function dedupeChoices(list) {
     const seen = new Set();
@@ -253,6 +369,208 @@
         || window.FOODS.find(f => f.name === name);
   }
 
+  function roundKcal(v) {
+    return Math.max(0, Math.round(v || 0));
+  }
+
+  function pushFoodItem(items, text, grams, food, note) {
+    if (!food || !grams || grams <= 0) {
+      items.push({ text, kcal: null, note: !!note });
+      return;
+    }
+    items.push({ text, kcal: roundKcal(grams * food.kcal / 100), note: !!note });
+  }
+
+  const RECIPE_NAME_ALIASES = [
+    ['燕麦片', '燕麦片纯', '生'],
+    ['燕麦', '燕麦片纯', '生'],
+    ['低脂牛奶', '低脂纯牛奶', '即食'],
+    ['牛奶', '低脂纯牛奶', '即食'],
+    ['无糖豆浆', '无糖豆浆', '即食'],
+    ['低脂无糖酸奶', '低脂无糖酸奶', '即食'],
+    ['无糖酸奶', '低脂无糖酸奶', '即食'],
+    ['全麦吐司', '全麦吐司', '即食'],
+    ['全麦面包', '全麦面包', '熟'],
+    ['全麦吐司', '全麦吐司', '即食'],
+    ['鸡蛋清', '鸡蛋清', '生'],
+    ['鸡蛋', '鸡蛋(整蛋)', '生'],
+    ['紫薯', '紫薯蒸', '熟'],
+    ['蒸紫薯', '紫薯蒸', '熟'],
+    ['糙米饭', '糙米饭', '熟'],
+    ['白米饭', '白米饭', '熟'],
+    ['藜麦', '藜麦', '生'],
+    ['熟藜麦', '藜麦', '熟'],
+    ['土豆', '土豆蒸', '熟'],
+    ['蒸土豆', '土豆蒸', '熟'],
+    ['香蕉', '香蕉', '生'],
+    ['蓝莓', '蓝莓', '生'],
+    ['草莓', '草莓', '生'],
+    ['苹果', '苹果', '生'],
+    ['杏仁', '杏仁', '生'],
+    ['奇亚籽', '奇亚籽', '生'],
+    ['鸡胸肉', '鸡胸肉', '生'],
+    ['熟鸡胸肉', '鸡胸肉(水煮)', '熟'],
+    ['即食鸡胸', '即食鸡胸肉', '即食'],
+    ['去皮鸡腿肉', '去皮鸡腿肉', '生'],
+    ['瘦牛里脊', '瘦牛肉(牛里脊)', '生'],
+    ['瘦牛肉', '瘦牛肉(牛里脊)', '生'],
+    ['牛腱子', '牛腱子肉', '生'],
+    ['三文鱼', '三文鱼', '生'],
+    ['巴沙鱼', '巴沙鱼', '生'],
+    ['龙利鱼', '龙利鱼', '生'],
+    ['鲈鱼', '鲈鱼', '生'],
+    ['虾仁', '青虾', '生'],
+    ['青虾', '青虾', '生'],
+    ['老豆腐', '老豆腐(北豆腐)', '即食'],
+    ['嫩豆腐', '嫩豆腐(南豆腐)', '即食'],
+    ['去皮鸭胸肉', '去皮鸭胸肉', '生'],
+    ['鳕鱼', '鳕鱼', '生'],
+    ['鳕鱼', '鳕鱼', '生'],
+    ['西兰花', '西兰花', '生'],
+    ['菠菜', '菠菜', '生'],
+    ['番茄', '番茄', '生'],
+    ['生菜', '生菜', '生'],
+    ['黄瓜', '黄瓜', '生'],
+    ['金针菇', '金针菇', '生'],
+    ['青椒', '青椒', '生'],
+    ['彩椒', '青椒', '生'],
+    ['冬瓜', '冬瓜', '生'],
+    ['小白菜', '娃娃菜', '生'],
+    ['青菜', '油麦菜', '生'],
+    ['杏鲍菇', '杏鲍菇', '生'],
+    ['橄榄油', '橄榄油', '即食'],
+    ['坚果', '杏仁', '生'],
+    ['小米', '小米', '生'],
+    ['山药', '山药', '生'],
+    ['玉米水煮', '玉米水煮', '熟'],
+    ['猕猴桃', '猕猴桃', '生'],
+    ['芹菜', '芹菜', '生'],
+    ['娃娃菜', '娃娃菜', '生'],
+    ['香蕉', '香蕉', '生'],
+    ['芹菜', '芹菜', '生'],
+    ['娃娃菜', '娃娃菜', '生'],
+    ['猎猎鱼', '鳥魗鱼', '生'],
+    ['猪里脊', '瘦猪肉(猪里脊)', '生'],
+    ['鱼米', '白米饭', '熟'],
+    ['猪肉', '瘦猪肉(猪里脊)', '生'],
+  ];
+
+  const RECIPE_UNIT_DEFAULTS = {
+    '鸡蛋(整蛋)': 50,
+    '鸡蛋清': 33,
+    '香蕉': 120,
+    '苹果': 180,
+    '番茄': 150,
+    '低脂纯牛奶': 250,
+    '低脂无糖酸奶': 200,
+    '全麦吐司': 35,
+    '全麦面包': 35,
+  };
+
+  const RECIPE_DIRECT_KCAL = [
+    [/奶酪 1 片/, 55],
+    [/低脂奶酪 1 片/, 45],
+    [/紫菜/, 8],
+    [/少量香油/, 20],
+    [/酱油少许/, 5],
+    [/黑胡椒/, 0],
+    [/柠檬/, 5],
+    [/姜片|姜丝/, 3],
+    [/蒸鱼豉油/, 10],
+    [/葱花|洋葱/, 10],
+    [/虾米少许/, 8],
+    [/枸杞少许/, 5],
+  ];
+
+  const RECIPE_MET = {
+    resistance: { bulk: 4.8, cut: 5.0, maintain: 4.9 },
+    cardio: { bulk: 6.0, cut: 7.0, maintain: 6.5 },
+    warmup: 3.3,
+  };
+
+  function findRecipeFood(text) {
+    for (const [needle, name, raw] of RECIPE_NAME_ALIASES) {
+      if (text.includes(needle)) return pickFoodByName(name, raw);
+    }
+    return null;
+  }
+
+  function parseRecipeAmount(text, food) {
+    const gramMatch = text.match(/(\d+(?:\.\d+)?)\s*g/);
+    if (gramMatch) return +gramMatch[1];
+    const mlMatch = text.match(/(\d+(?:\.\d+)?)\s*ml/);
+    if (mlMatch) return +mlMatch[1];
+    const pieceMatch = text.match(/(\d+(?:\.\d+)?)\s*(个|根|片)/);
+    if (pieceMatch) {
+      const count = +pieceMatch[1];
+      const unit = pieceMatch[2];
+      const per = RECIPE_UNIT_DEFAULTS[food?.name] || (unit === '片' ? 35 : 100);
+      return count * per;
+    }
+    const comboEgg = text.match(/鸡蛋清\s*(\d+)\s*个\+整蛋\s*(\d+)\s*个/);
+    if (comboEgg && food?.name === '鸡蛋清') return (+comboEgg[1]) * RECIPE_UNIT_DEFAULTS['鸡蛋清'];
+    if (comboEgg && food?.name === '鸡蛋(整蛋)') return (+comboEgg[2]) * RECIPE_UNIT_DEFAULTS['鸡蛋(整蛋)'];
+    if (/生菜\/番茄/.test(text)) return 150;
+    if (/彩椒\/菠菜/.test(text)) return 200;
+    if (/西兰花\/胡萝卜/.test(text)) return 200;
+    if (/冬瓜\/番茄\/菠菜/.test(text)) return 250 / 3;
+    if (/杏鲍菇\/生菜/.test(text)) return 200 / 2;
+    if (/金针菇\/杏鲍菇/.test(text)) return 200;
+    return RECIPE_UNIT_DEFAULTS[food?.name] || null;
+  }
+
+  function estimateRecipeIngredient(text) {
+    for (const [rule, kcal] of RECIPE_DIRECT_KCAL) {
+      if (rule.test(text)) return { text, kcal };
+    }
+    if (/生菜\/番茄/.test(text)) {
+      return { text, kcal: roundKcal(75 * pickFoodByName('生菜', '生').kcal / 100 + 75 * pickFoodByName('番茄', '生').kcal / 100) };
+    }
+    if (/彩椒\/菠菜/.test(text)) {
+      return { text, kcal: roundKcal(100 * pickFoodByName('青椒', '生').kcal / 100 + 100 * pickFoodByName('菠菜', '生').kcal / 100) };
+    }
+    if (/西兰花\/胡萝卜/.test(text)) {
+      return { text, kcal: roundKcal(100 * pickFoodByName('西兰花', '生').kcal / 100 + 100 * 41 / 100) };
+    }
+    if (/冬瓜\/番茄\/菠菜/.test(text)) {
+      return { text, kcal: roundKcal((250 / 3) * (pickFoodByName('冬瓜', '生').kcal + pickFoodByName('番茄', '生').kcal + pickFoodByName('菠菜', '生').kcal) / 100) };
+    }
+    if (/杏鲍菇\/生菜/.test(text)) {
+      return { text, kcal: roundKcal(100 * pickFoodByName('杏鲍菇', '生').kcal / 100 + 100 * pickFoodByName('生菜', '生').kcal / 100) };
+    }
+    const food = findRecipeFood(text);
+    if (!food) return { text, kcal: null };
+    const grams = parseRecipeAmount(text, food);
+    if (!grams) return { text, kcal: null };
+    let kcal = grams * food.kcal / 100;
+    if (food.name === '藜麦' && text.includes('熟藜麦')) kcal = grams * 120 / 100;
+    return { text, kcal: roundKcal(kcal) };
+  }
+
+  function estimateRecipe(recipe) {
+    const items = (recipe.items || []).map(estimateRecipeIngredient);
+    const known = items.filter(item => item.kcal != null);
+    return {
+      ...recipe,
+      itemsDetailed: items,
+      kcal: known.length ? known.reduce((sum, item) => sum + item.kcal, 0) : null,
+    };
+  }
+
+  function kcalFromMet(weightKg, minutes, met) {
+    return roundKcal((met * 3.5 * weightKg / 200) * minutes);
+  }
+
+  function estimateTrainingBurn({ weightKg, goal, minutes, cardioMinutes, cardioOnly }) {
+    const warmupMinutes = cardioOnly ? 0 : 12;
+    const resistanceMinutes = cardioOnly ? 0 : Math.max(0, minutes - warmupMinutes - cardioMinutes);
+    const resistanceMet = RECIPE_MET.resistance[goal] || RECIPE_MET.resistance.maintain;
+    const cardioMet = RECIPE_MET.cardio[goal] || RECIPE_MET.cardio.maintain;
+    return kcalFromMet(weightKg, resistanceMinutes, resistanceMet)
+      + kcalFromMet(weightKg, cardioMinutes, cardioMet)
+      + kcalFromMet(weightKg, warmupMinutes, RECIPE_MET.warmup);
+  }
+
   // meal.idx 是该餐次序号（0/1/2），用于轮换
   function pickMealFoods(meal, goal, prefs) {
     const items = [];
@@ -272,65 +590,79 @@
           const egg = pickFoodByName('鸡蛋(整蛋)','生');
           const eggs = goal === 'cut' ? 1 : Math.min(2, Math.floor(proteinG/15));
           const eggGrams = eggs * 50;
-          items.push(`鸡蛋（整蛋）${eggs} 个 / 约 ${eggGrams} g`);
+          pushFoodItem(items, `鸡蛋（整蛋）${eggs} 个 / 约 ${eggGrams} g`, eggGrams, egg);
           proteinG -= eggGrams*egg.p/100;
           carbG    -= eggGrams*egg.c/100;
           fatG     -= eggGrams*egg.f/100;
         }
-        // 主蛋白
+        // 主蛋白：单餐单一食材上限 200 g（大众饮食习惯 + 蛋白合成效率），超出自动拆分
         let grams = Math.round(proteinG / (main.p/100));
-        // 单餐生肉 >300 g 时，拆分一部分给蛋类或豆制品
-        if (grams > 300 && goal !== 'bulk') {
-          const half = Math.round(grams / 2);
-          items.push(`${main.name}（生）${half} g`);
-          // 剩下用鸡蛋清/老豆腐
-          const tofu = pickFoodByName('老豆腐(北豆腐)','即食');
-          const remainP = proteinG - half*main.p/100;
-          if (remainP > 0 && tofu) {
-            const tg = Math.round(remainP / (tofu.p/100));
-            items.push(`${tofu.name} ${tg} g`);
-            proteinG = remainP - tg*tofu.p/100;
-            carbG -= tg*tofu.c/100; fatG -= tg*tofu.f/100;
+        if (grams > 200) {
+          const capped = Math.min(Math.round(grams / 2), 200);
+          pushFoodItem(items, `${main.name}（生）${capped} g`, capped, main);
+          // 剩余蛋白优先用即食鸡胸肉（蛋白密度高）或老豆腐补足
+          const secFood = pickFoodByName('即食鸡胸肉', '即食') || pickFoodByName('老豆腐(北豆腐)', '即食');
+          const remainP = proteinG - capped * main.p / 100;
+          if (remainP > 0 && secFood) {
+            const tg = Math.min(Math.round(remainP / (secFood.p / 100)), 250);
+            if (tg > 0) {
+              pushFoodItem(items, `${secFood.name} ${tg} g`, tg, secFood);
+              proteinG = remainP - tg * secFood.p / 100;
+              carbG -= tg * secFood.c / 100; fatG -= tg * secFood.f / 100;
+            }
           }
-          carbG -= half*main.c/100; fatG -= half*main.f/100;
+          carbG -= capped * main.c / 100; fatG -= capped * main.f / 100;
         } else {
-          items.push(`${main.name}（生）${grams} g`);
+          pushFoodItem(items, `${main.name}（生）${grams} g`, grams, main);
           carbG -= grams*main.c/100; fatG -= grams*main.f/100;
           proteinG = 0;
         }
       }
     }
 
-    // 2) 碳水（轮换；减脂末餐少/无碳水已在 mealsPlan 中减量）
+    // 2) 碳水（轮换；减脂末餐少/无碳水已在 mealsPlan 中减量；单餐熟食上限 350 g）
     if (carbG > 5) {
       const list = getCarbRotation(goal, prefs);
       const choice = list[idx % list.length];
       const carb = pickFoodByName(choice[0], choice[1]);
       if (carb) {
-        const grams = Math.round(carbG / (carb.c/100));
-        items.push(`${carb.name}${carb.raw==='生'?'（生）':carb.raw==='熟'?'（熟）':''} ${grams} g`);
+        let grams = Math.round(carbG / (carb.c/100));
+        const MAX_CARB_GRAMS = 350;
+        if (grams > MAX_CARB_GRAMS) {
+          const remainC = carbG - MAX_CARB_GRAMS * carb.c / 100;
+          grams = MAX_CARB_GRAMS;
+          pushFoodItem(items, `${carb.name}${carb.raw==='生'?'（生）':carb.raw==='熟'?'（熟）':''} ${grams} g`, grams, carb);
+          if (remainC > 8) {
+            const bananaPer100 = 22.8;
+            const bananaG = Math.round(remainC / bananaPer100 * 100);
+            items.push({ text: `香蕉 约 ${bananaG} g（${Math.round(bananaG/120)} 根）补充剩余碳水`, kcal: Math.round(bananaG * 0.91), note: true });
+          }
+        } else {
+          pushFoodItem(items, `${carb.name}${carb.raw==='生'?'（生）':carb.raw==='熟'?'（熟）':''} ${grams} g`, grams, carb);
+        }
         proteinG -= grams*carb.p/100; fatG -= grams*carb.f/100;
       }
     } else if (meal.tag === 'last' && goal === 'cut') {
-      items.push('（减脂期末餐）不安排主食或仅以低碳蔬菜替代');
+      items.push({ text: '（减脂期末餐）不安排主食或仅以低碳蔬菜替代', kcal: null, note: true });
     }
 
     // 3) 蔬菜轮换（每餐 200 g）
     const veg = VEG_ROTATION[idx % VEG_ROTATION.length];
-    items.push(`${veg} 200 g（${goal==='cut'?'水焯/清蒸':'清炒/水焯'}）`);
+    const vegFood = pickFoodByName(veg, '生');
+    pushFoodItem(items, `${veg} 200 g（${goal==='cut'?'水焯/清蒸':'清炒/水焯'}）`, 200, vegFood);
 
     // 4) 脂肪补足
     if (fatG > 3) {
       const oil = pickFoodByName('橄榄油');
       const grams = Math.round(fatG / (oil.f/100));
-      if (grams > 0) items.push(`烹饪用橄榄油 ${grams} g`);
+      if (grams > 0) pushFoodItem(items, `烹饪用橄榄油 ${grams} g`, grams, oil);
     } else if (fatG < -3) {
-      items.push('注：本餐蛋白源已含较多脂肪，烹饪请少油（喷油/刷油）');
+      items.push({ text: '注：本餐蛋白源已含较多脂肪，烹饪请少油（喷油/刷油）', kcal: null, note: true });
     }
 
     // 5) 减脂期脂肪缺口 > 8 → 主动补充健康脂肪
     if (goal === 'cut' && fatG > 8) {
-      items.push('额外补充健康脂肪：核桃 1 把 ≈15 g 或 牛油果 1/4 个 ≈40 g');
+      items.push({ text: '额外补充健康脂肪：核桃 1 把 ≈15 g 或 牛油果 1/4 个 ≈40 g', kcal: 97, note: true });
     }
 
     return items;
@@ -391,6 +723,7 @@
   function buildTrainingPlan(form) {
     const prefs = normalizePrefs(form);
     const goal = form.goal;
+    const weightKg = form.weightKg;
     let freq = form.freqPerWeek;
     if (!freq || freq < 1) {
       // 从 activityId 推断
@@ -405,7 +738,9 @@
 
     const days = split.sessions.map((sessionId, i) => {
       const tpl = window.SESSION_TEMPLATES[sessionId];
+      const cardioMinutes = sessionId === 'cardio' ? 38 + cardioBonus : tune.cardioMin + cardioBonus;
       if (tpl.cardioOnly) {
+        const minutes = 35 + cardioBonus;
         return {
           weekday: layout[i], title: tpl.name, sessionId,
           warmup: ['5 分钟动态拉伸'],
@@ -413,7 +748,9 @@
           cardio: `中低强度有氧 ${30 + cardioBonus}-${45 + cardioBonus} 分钟（慢跑/骑行/游泳/快走）`,
           cooldown: window.EXERCISES.cooldown.slice(0,2),
           totalSets: 0,
-          minutes: 35 + cardioBonus,
+          cardioMinutes,
+          minutes,
+          burnKcal: estimateTrainingBurn({ weightKg, goal, minutes, cardioMinutes, cardioOnly: true }),
         };
       }
       const usedNames = new Set();
@@ -426,7 +763,8 @@
       }).filter(Boolean);
       const totalSets = exercises.reduce((s,e)=>s+e.sets, 0);
       // 每组工作时长 ≈ 40s + 休息
-      const minutes = Math.round(exercises.reduce((s,e)=> s + e.sets*(40+e.rest)/60, 0)) + 12 + cardioBonus; // 12 = 热身+放松
+      const baseMinutes = Math.round(exercises.reduce((s,e)=> s + e.sets*(40+e.rest)/60, 0)) + 12;
+      const minutes = baseMinutes + cardioMinutes;
       return {
         weekday: layout[i],
         title: tpl.name,
@@ -436,10 +774,13 @@
         cardio: `${tune.cardioMin + cardioBonus} 分钟 ${tune.cardioType}`,
         cooldown: window.EXERCISES.cooldown,
         totalSets,
+        cardioMinutes,
         minutes,
+        burnKcal: estimateTrainingBurn({ weightKg, goal, minutes, cardioMinutes, cardioOnly: false }),
       };
     });
-    return { freq, splitName: split.name, splitDesc: split.desc, days, tune: { ...tune, cardioMin: tune.cardioMin + cardioBonus }, prefs };
+    const weeklyBurnKcal = days.reduce((sum, day) => sum + (day.burnKcal || 0), 0);
+    return { freq, splitName: split.name, splitDesc: split.desc, days, tune: { ...tune, cardioMin: tune.cardioMin + cardioBonus }, weeklyBurnKcal, prefs };
   }
 
   // 总入口
@@ -458,16 +799,17 @@
     const cooking = cookingRules(goal);
     const training = trainingNotes(goal, freqPerWeek, hasResistance, activityId, prefs);
     const trainingPlan = buildTrainingPlan(form);
-    const recipes = pickPreferredRecipes(goal, prefs);
+    const recipes = Object.fromEntries(Object.entries(pickPreferredRecipes(goal, prefs)).map(([slot, list]) => [slot, list.map(estimateRecipe)]));
     const adjust = monthlyAdjust(goal);
 
     const leanMassKg = bodyFatPct ? +(weightKg * (1 - bodyFatPct/100)).toFixed(1) : null;
     const fatMassKg  = bodyFatPct ? +(weightKg * (bodyFatPct/100)).toFixed(1) : null;
+    const progress = buildProgressGuide({ sex, heightCm, weightKg, goal, bodyFatPct, leanMassKg });
 
     return {
       input: form, bmr: Math.round(bmrVal), tdee: Math.round(tdeeVal),
       target: tgt, macros: M, meals: meal_foods, fiber, water, bmi: bmiV,
-      leanMassKg, fatMassKg, cooking, training, trainingPlan, recipes, preferences: prefs, adjust,
+      leanMassKg, fatMassKg, progress, cooking, training, trainingPlan, recipes, preferences: prefs, adjust,
       activity: window.ACTIVITY_LEVELS.find(a => a.id === activityId),
     };
   }

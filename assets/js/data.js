@@ -101,6 +101,7 @@ window.FOODS = [
   {cat:'fruit',name:'圣女果',raw:'生',kcal:22,c:4.8,p:1.0,f:0.2,fiber:1.2},
   {cat:'fruit',name:'橙子',raw:'生',kcal:47,c:11.1,p:1.1,f:0.2,fiber:2.2},
   {cat:'fruit',name:'梨',raw:'生',kcal:50,c:13.3,p:0.4,f:0.2,fiber:3.1},
+  {cat:'fruit',name:'香蕉',raw:'生',kcal:91,c:22.8,p:1.1,f:0.1,fiber:2.6},
   // 低脂蔬菜
   {cat:'veg',name:'菠菜',raw:'生',kcal:28,c:4.5,p:2.6,f:0.3,fiber:2.2},
   {cat:'veg',name:'西兰花',raw:'生',kcal:34,c:6.6,p:2.8,f:0.4,fiber:2.4},
@@ -158,6 +159,8 @@ window.FOODS = [
   {cat:'meat',name:'牛腱子肉',raw:'生',kcal:96,c:0,p:21.4,f:1.6,fiber:0},
   {cat:'meat',name:'鳕鱼',raw:'生',kcal:82,c:0,p:17.5,f:0.9,fiber:0},
   {cat:'meat',name:'鸡胸肉(水煮)',raw:'熟',kcal:165,c:0,p:31.0,f:3.6,fiber:0},
+  {cat:'meat',name:'去皮鸭胸肉(煎)',raw:'熟',kcal:136,c:0,p:27.0,f:2.1,fiber:0},
+  {cat:'meat',name:'鳕鱼(清蒸)',raw:'熟',kcal:98,c:0,p:20.9,f:1.1,fiber:0},
   {cat:'meat',name:'瘦牛肉(清炖)',raw:'熟',kcal:250,c:0,p:28.0,f:15.0,fiber:0},
   {cat:'meat',name:'瘦猪肉(清炖)',raw:'熟',kcal:242,c:0,p:29.0,f:13.0,fiber:0},
   {cat:'meat',name:'龙利鱼(清蒸)',raw:'熟',kcal:105,c:0,p:23.6,f:1.0,fiber:0},
