@@ -454,6 +454,16 @@
     items.push({ text, kcal: roundKcal(grams * food.kcal / 100), note: !!note });
   }
 
+  function formatProteinServingText(food, rawGrams) {
+    if (!food) return `${rawGrams} g`;
+    // 内部仍按数据库口径（生重）核算营养，展示改为更符合饮食习惯的熟重参考。
+    const isMeat = food.cat === 'meat';
+    if (!isMeat) return `${food.name} ${rawGrams} g`;
+    const cookedRatio = /鱼|虾/.test(food.name) ? 0.8 : 0.75;
+    const cookedGrams = Math.max(1, Math.round(rawGrams * cookedRatio));
+    return `${food.name}（熟）约 ${cookedGrams} g`;
+  }
+
   const RECIPE_NAME_ALIASES = [
     ['燕麦片', '燕麦片纯', '生'],
     ['燕麦', '燕麦片纯', '生'],
@@ -672,7 +682,7 @@
         let grams = Math.round(proteinG / (main.p/100));
         if (grams > 200) {
           const capped = Math.min(Math.round(grams / 2), 200);
-          pushFoodItem(items, `${main.name}（生）${capped} g`, capped, main);
+          pushFoodItem(items, formatProteinServingText(main, capped), capped, main);
           // 剩余蛋白优先用即食鸡胸肉（蛋白密度高）或老豆腐补足
           const secFood = pickFoodByName('即食鸡胸肉', '即食') || pickFoodByName('老豆腐(北豆腐)', '即食');
           const remainP = proteinG - capped * main.p / 100;
@@ -686,7 +696,7 @@
           }
           carbG -= capped * main.c / 100; fatG -= capped * main.f / 100;
         } else {
-          pushFoodItem(items, `${main.name}（生）${grams} g`, grams, main);
+          pushFoodItem(items, formatProteinServingText(main, grams), grams, main);
           carbG -= grams*main.c/100; fatG -= grams*main.f/100;
           proteinG = 0;
         }
