@@ -11,6 +11,11 @@
   // i18n shortcut – falls back gracefully if i18n.js not loaded yet
   const t = (k) => (window.t ? window.t(k) : k);
 
+  function systemMetaText() {
+    const m = window.SYSTEM_META || {};
+    return `当前系统版本：${m.version || '—'} · 更新日期：${m.updatedAt || '—'}`;
+  }
+
   function setChecks(name, values) {
     const picked = new Set(Array.isArray(values) ? values : []);
     document.querySelectorAll(`input[name="${name}"]`).forEach((input) => {
@@ -153,6 +158,10 @@
         <ol id="toc-list"></ol>
       </aside>
       <div class="report-column">
+        <p class="build-meta report-meta">${esc(systemMetaText())}</p>
+        <div class="disclaimer-banner disclaimer-report" role="alert">
+          ⚠️ <strong>免责声明：</strong>本方案仅供健康参考，不构成医疗建议。请在实施前咨询专业医生或持证健身专家。
+        </div>
         <div class="report-main" id="report-main"></div>
         <section class="ref-panel no-print" id="reference-area"></section>
       </div>

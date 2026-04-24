@@ -1,4 +1,9 @@
 // 数据层：完全来自《运动饮食指南》文档（表0~表8 + 文中规则）
+window.SYSTEM_META = {
+  version: 'v12',
+  updatedAt: '2026-04-24',
+};
+
 // 1) BMR 公式（世卫组织静息代谢估算） —— 表0
 window.BMR_FORMULAS = [
   { sex: 'male',   ageMin: 10, ageMax: 18, k: 17.686, b: 658.2 },

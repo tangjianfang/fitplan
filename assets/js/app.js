@@ -13,6 +13,11 @@
     load() { try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch(e){ return {}; } },
   };
 
+  function systemMetaText() {
+    const m = window.SYSTEM_META || {};
+    return `当前系统版本：${m.version || '—'} · 更新日期：${m.updatedAt || '—'}`;
+  }
+
   /* ─── Dark Theme ─── */
   function initTheme() {
     const saved = (() => { try { return localStorage.getItem('fitplan-theme'); } catch(e){ return null; } })();
@@ -315,6 +320,8 @@
 
     fillActivity();
     fillExamples();
+    const homeMeta = document.getElementById('home-build-meta');
+    if (homeMeta) homeMeta.textContent = systemMetaText();
 
     // Header buttons
     $('#btn-theme').onclick = toggleTheme;
