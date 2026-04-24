@@ -10,6 +10,69 @@
     if (!f) return null;
     return f.k * weightKg + f.b;
   }
+  function bmrMifflin(sex, age, heightCm, weightKg) {
+    if (!sex || !age || !heightCm || !weightKg) return null;
+    const sexAdj = sex === 'male' ? 5 : -161;
+    return 10 * weightKg + 6.25 * heightCm - 5 * age + sexAdj;
+  }
+  function bmrHarrisBenedict(sex, age, heightCm, weightKg) {
+    if (!sex || !age || !heightCm || !weightKg) return null;
+    if (sex === 'male') return 88.362 + 13.397 * weightKg + 4.799 * heightCm - 5.677 * age;
+    return 447.593 + 9.247 * weightKg + 3.098 * heightCm - 4.33 * age;
+  }
+  function bmrKatchMcardle(leanMassKg) {
+    if (!leanMassKg || leanMassKg <= 0) return null;
+    return 370 + 21.6 * leanMassKg;
+  }
+  function getBmrComparison({ sex, age, heightCm, weightKg, bodyFatPct }) {
+    const leanMassKg = bodyFatPct != null ? +(weightKg * (1 - bodyFatPct / 100)).toFixed(1) : null;
+    const models = {
+      mifflin: {
+        key: 'mifflin',
+        label: 'Mifflin-St Jeor',
+        bmr: bmrMifflin(sex, age, heightCm, weightKg),
+        note: '通用人群首选',
+      },
+      harris: {
+        key: 'harris',
+        label: 'Harris-Benedict（修正版）',
+        bmr: bmrHarrisBenedict(sex, age, heightCm, weightKg),
+        note: '经典公式，通常偏高',
+      },
+      katch: {
+        key: 'katch',
+        label: 'Katch-McArdle',
+        bmr: bmrKatchMcardle(leanMassKg),
+        note: leanMassKg ? '体脂已知时更贴近瘦体重' : '需要体脂率',
+      },
+      guide: {
+        key: 'guide',
+        label: '指南公式（分年龄段）',
+        bmr: bmr(sex, age, weightKg),
+        note: '遵循当前内置指南口径',
+      },
+    };
+
+    Object.values(models).forEach((m) => {
+      m.bmr = m.bmr == null ? null : Math.round(m.bmr);
+    });
+
+    // 自动策略：有体脂且有效时优先 Katch；否则 Mifflin；两者缺失回退指南公式。
+    let selected = models.mifflin;
+    if (bodyFatPct != null && bodyFatPct >= 5 && bodyFatPct <= 60 && models.katch.bmr != null) {
+      selected = models.katch;
+    }
+    if (selected.bmr == null) selected = models.mifflin.bmr != null ? models.mifflin : models.guide;
+    if (selected.bmr == null) selected = models.guide;
+
+    return {
+      selectedKey: selected.key,
+      selectedLabel: selected.label,
+      selectedBmr: selected.bmr,
+      leanMassKg,
+      models,
+    };
+  }
   function activityFactor(id) {
     const a = window.ACTIVITY_LEVELS.find(x => x.id === id);
     return a ? a.factor : 1.5;
@@ -34,15 +97,25 @@
       };
     }
 
-    // cut：默认 0.5 kg / 周脂肪（不超过 1% 体重/周；缺口下限 ≥ BMR）
+    // cut：采用缺口区间 + 安全阈值（下限≥BMR；周减重不超过体重1%）
     const maxWeeklyLossKg = weightKg * C.MAX_WEEKLY_FAT_LOSS_RATIO; // 1% 体重 / 周
-    const targetWeeklyKg = Math.min(0.5, maxWeeklyLossKg);
-    const dailyDeficit = (targetWeeklyKg * C.KCAL_PER_KG_FAT_LOSS) / 7;
-    let kcal = Math.round(tdeeVal - dailyDeficit);
+    const maxDailyDeficit = (maxWeeklyLossKg * C.KCAL_PER_KG_FAT_LOSS) / 7;
+    const deficitPct = 0.20;
+    const minPct = 0.15;
+    const maxPct = 0.25;
+    let kcal = Math.round(tdeeVal * (1 - deficitPct));
+    const lowKcal = Math.round(tdeeVal * (1 - maxPct));
+    const highKcal = Math.round(tdeeVal * (1 - minPct));
     const notes = [
-      `每周减脂目标 ${targetWeeklyKg.toFixed(2)} kg（不超过当前体重 1% = ${maxWeeklyLossKg.toFixed(2)} kg/周）`,
-      `${targetWeeklyKg.toFixed(2)} × 7700 ÷ 7 ≈ ${Math.round(dailyDeficit)} kcal/日 缺口`,
+      `减脂建议缺口区间 15%–25%，当前按 20% 缺口估算`,
+      `对应摄入区间约 ${lowKcal}-${highKcal} kcal/日（以当前活动水平估算）`,
+      `每周减重上限按当前体重 1%：${maxWeeklyLossKg.toFixed(2)} kg/周`,
     ];
+    const minByWeeklyLoss = Math.round(tdeeVal - maxDailyDeficit);
+    if (kcal < minByWeeklyLoss) {
+      kcal = minByWeeklyLoss;
+      notes.push(`触发减重速度保护：摄入不低于 ${minByWeeklyLoss} kcal/日，避免周降重超过上限`);
+    }
     if (kcal < bmrVal) {
       kcal = Math.round(bmrVal);
       notes.push(`触发安全下限：每日摄入不得低于静息代谢 ${Math.round(bmrVal)} kcal，已按下限取值`);
@@ -787,7 +860,8 @@
   function buildReport(form) {
     const { sex, age, heightCm, weightKg, bodyFatPct, goal, activityId, freqPerWeek, hasResistance } = form;
     const prefs = normalizePrefs(form);
-    const bmrVal = bmr(sex, age, weightKg);
+    const bmrStrategy = getBmrComparison({ sex, age, heightCm, weightKg, bodyFatPct });
+    const bmrVal = bmrStrategy.selectedBmr;
     const tdeeVal = tdee(bmrVal, activityId);
     const tgt = targetCalories({ goal, tdeeVal, bmrVal, weightKg });
     const M = macros(tgt.kcal, goal);
@@ -802,7 +876,7 @@
     const recipes = Object.fromEntries(Object.entries(pickPreferredRecipes(goal, prefs)).map(([slot, list]) => [slot, list.map(estimateRecipe)]));
     const adjust = monthlyAdjust(goal);
 
-    const leanMassKg = bodyFatPct ? +(weightKg * (1 - bodyFatPct/100)).toFixed(1) : null;
+    const leanMassKg = bmrStrategy.leanMassKg;
     const fatMassKg  = bodyFatPct ? +(weightKg * (bodyFatPct/100)).toFixed(1) : null;
     const progress = buildProgressGuide({ sex, heightCm, weightKg, goal, bodyFatPct, leanMassKg });
 
@@ -810,6 +884,7 @@
       input: form, bmr: Math.round(bmrVal), tdee: Math.round(tdeeVal),
       target: tgt, macros: M, meals: meal_foods, fiber, water, bmi: bmiV,
       leanMassKg, fatMassKg, progress, cooking, training, trainingPlan, recipes, preferences: prefs, adjust,
+      bmrStrategy,
       activity: window.ACTIVITY_LEVELS.find(a => a.id === activityId),
     };
   }

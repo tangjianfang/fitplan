@@ -237,8 +237,23 @@
   }
 
   function secAssess(r, form) {
-    const guide = r.progress;
+    const guide = r.progress || {
+      healthy: { low: '—', high: '—' },
+      actionLabel: '目标建议',
+      actionValue: '—',
+      actionSub: '—',
+      paceLabel: '节奏建议',
+      paceValue: '—',
+      paceSub: '—',
+      notes: ['评估数据暂不可用，请重新生成。'],
+    };
+    const bmrStrategy = r.bmrStrategy || null;
+    const bmrRows = bmrStrategy ? Object.values(bmrStrategy.models || {}).map((m) => {
+      const isSelected = m.key === bmrStrategy.selectedKey;
+      return `<li>${esc(m.label)}：<b>${m.bmr ?? '—'} kcal</b>${isSelected ? '（当前基准）' : ''} · ${esc(m.note || '')}</li>`;
+    }).join('') : '';
     const bmi = r.bmi;
+    const act = r.activity || { factor: '—', name: '活动未识别' };
     const bmiCls = bmiColorClass(bmi?.cat);
     const bmiGauge = window._APP_CHARTS ? window._APP_CHARTS.bmiGaugeSvg(bmi?.value ?? null) : '';
     return `
@@ -246,19 +261,21 @@
         <div class="stat"><div class="lbl">${t(form.sex==='male'?'opt_male':'opt_female')} · ${form.age} 岁</div><div class="val">${form.heightCm}/${form.weightKg}</div><div class="sub">cm / kg</div></div>
         <div class="stat"><div class="lbl">BMI ${infoBtn('bmi',{bmiVal:bmi?.value??''})}</div><div class="val ${bmiCls}">${bmi?.value ?? '—'}</div><div class="sub">${esc(bmi?.cat ?? '')}</div></div>
         <div class="stat"><div class="lbl">BMR ${infoBtn('bmr',{})}</div><div class="val">${r.bmr}</div><div class="sub">kcal · 静息代谢</div></div>
-        <div class="stat"><div class="lbl">TDEE ${infoBtn('tdee',{})}</div><div class="val brand">${r.tdee}</div><div class="sub">×${r.activity.factor} ${esc(r.activity.name)}</div></div>
+        <div class="stat"><div class="lbl">TDEE ${infoBtn('tdee',{})}</div><div class="val brand">${r.tdee}</div><div class="sub">×${act.factor} ${esc(act.name)}</div></div>
         ${r.leanMassKg!=null ? `<div class="stat"><div class="lbl">${t('lbl_lean_fat')} ${infoBtn('bf',{bfPct:form.bodyFatPct??'',sex:form.sex||'male'})}</div><div class="val">${r.leanMassKg}/${r.fatMassKg}</div><div class="sub">kg · ${t('unit_lean')} ${form.bodyFatPct}%</div></div>` : ''}
         <div class="stat"><div class="lbl">${t('lbl_healthy_range')} ${infoBtn('hw',{})}</div><div class="val">${guide.healthy.low}-${guide.healthy.high}</div><div class="sub">kg · ${t('unit_bmi_range')}</div></div>
         <div class="stat"><div class="lbl">${esc(guide.actionLabel)}</div><div class="val brand">${esc(guide.actionValue)}</div><div class="sub">${esc(guide.actionSub)}</div></div>
         <div class="stat"><div class="lbl">${esc(guide.paceLabel)}</div><div class="val">${esc(guide.paceValue)}</div><div class="sub">${esc(guide.paceSub)}</div></div>
       </div>
       ${bmiGauge}
-      <ul class="tight">${guide.notes.map((note) => `<li>${esc(note)}</li>`).join('')}</ul>`;
+        ${bmrStrategy ? `<h3>BMR 三公式对比（自动择优）</h3><ul class="tight">${bmrRows}</ul>` : ''}
+        <ul class="tight">${(guide.notes || []).map((note) => `<li>${esc(note)}</li>`).join('')}</ul>`;
   }
 
   function secEnergy(r, form) {
     const goalLabel = {bulk:t('opt_bulk'), cut:t('opt_cut'), maintain:t('opt_maintain')}[form.goal];
     const ratioLabel = window.MACRO_RATIOS[form.goal].label;
+    const bmrBaseLabel = r.bmrStrategy?.selectedLabel || '当前基准';
     const M = r.macros, kcal = r.target.kcal;
     const diff = kcal - r.tdee;
     const isDeficit = diff < 0;
@@ -281,6 +298,7 @@
         <div class="stat"><div class="lbl">${t('lbl_daily_target')} · ${goalLabel}</div><div class="val brand">${kcal}</div><div class="sub">kcal</div></div>
         <div class="stat"><div class="lbl">${t('lbl_vs_tdee')}</div><div class="val ${diff>=0?'val-normal':'val-over'}">${diff>=0?'+':''}${diff}</div><div class="sub">kcal</div></div>
         <div class="stat"><div class="lbl">${t('lbl_fiber')}</div><div class="val">${r.fiber.min}${r.fiber.max!==r.fiber.min?'–'+r.fiber.max:''}</div><div class="sub">g/日</div></div>
+        <div class="stat"><div class="lbl">BMR 基准</div><div class="val">${esc(bmrBaseLabel)}</div><div class="sub">用于 TDEE 与目标热量计算</div></div>
       </div>
       <div class="cal-balance">
         <div class="cal-balance-label"><span>TDEE ${r.tdee} kcal</span><span>目标 ${kcal} kcal (${isDeficit?'缺额':'盈余'} ${Math.abs(diff)} kcal)</span></div>
