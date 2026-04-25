@@ -11,6 +11,9 @@
   // i18n shortcut – falls back gracefully if i18n.js not loaded yet
   const t = (k) => (window.t ? window.t(k) : k);
 
+  // Store last build for clean A4 export
+  let _lastReport = null, _lastForm = null;
+
   function systemMetaText() {
     const m = window.SYSTEM_META || {};
     return `当前系统版本：${m.version || '—'} · 更新日期：${m.updatedAt || '—'}`;
@@ -147,7 +150,7 @@
       alert('请补全：性别 / 年龄 / 身高 / 体重 / 目标'); return false;
     }
     const r = window.CALC.buildReport(form);
-
+    _lastReport = r; _lastForm = form;
     const SECTION_GROUPS = getSectionGroups();
     const REFERENCE_GROUP = SECTION_GROUPS.find(group => !group.report);
 
@@ -557,40 +560,266 @@
     });
   }
 
-  async function exportPng() {
-    if (!window.html2canvas) { alert('图片导出库加载中，请稍后再试'); return; }
-    const node = $('#report-main') || $('#report');
-    const canvas = await html2canvas(node, {scale:2, backgroundColor:'#ffffff', useCORS:true});
-    const a = document.createElement('a');
-    a.download = `健身饮食方案_${new Date().toISOString().slice(0,10)}.png`;
-    a.href = canvas.toDataURL('image/png');
-    a.click();
+  // ── A4 clean-document builder ──────────────────────────────────────
+  function buildPrintDoc(r, form) {
+    const meta  = window.SYSTEM_META || {};
+    const e     = esc; // reuse IIFE esc helper
+    const goalMap = { bulk:'增肌', cut:'减脂', maintain:'维持' };
+    const goalLabel = goalMap[form.goal] || form.goal;
+    const sexLabel  = form.sex === 'male' ? '男' : '女';
+    const dateStr   = new Date().toLocaleDateString('zh-CN');
+    const M  = r.macros;
+    const tp = r.trainingPlan;
+    const act = r.activity || { name: '' };
+    const guide = r.progress || {};
+
+    /* ── helpers ── */
+    const kvCell = (lbl, val, unit='') =>
+      `<div class="kvc"><div class="kl">${e(lbl)}</div><div class="kv">${e(String(val))}` +
+      (unit ? `<span class="ku"> ${e(unit)}</span>` : '') + `</div></div>`;
+
+    const mBar = (lbl, pct, color, g) =>
+      `<div class="mbar"><span class="ml">${e(lbl)} ${pct}%</span>` +
+      `<div class="mbt"><div class="mbf" style="width:${pct}%;background:${color}"></div></div>` +
+      `<span class="mv">${g} g</span></div>`;
+
+    const list = arr => arr.map(x => `<li>${e(String(x))}</li>`).join('');
+
+    const foodList = arr => arr.map(f => {
+      const it = typeof f === 'string' ? { text: f } : f;
+      return `<li>${e(it.text)}${it.kcal != null ? `<span class="kb">${it.kcal} kcal</span>` : ''}</li>`;
+    }).join('');
+
+    /* ── training days ── */
+    const trainingHtml = tp.days.map(d => {
+      if (d.sessionId === 'cardio') {
+        return `<div class="db"><div class="dt">${e(d.weekday)} · ${e(d.title)}</div>` +
+          `<p class="dim">${e(d.cardio)} · 约 ${d.minutes} min · ≈ ${d.burnKcal} kcal</p></div>`;
+      }
+      const rows = d.exercises.map((x, i) =>
+        `<tr><td>${i+1}</td><td><b>${e(x.name)}</b><div class="dim">${e(x.eq)}${x.tip?' · '+e(x.tip):''}</div></td>` +
+        `<td>${x.sets}×${e(x.reps)}</td><td>${x.rest}s</td></tr>`).join('');
+      return `<div class="db"><div class="dt">${e(d.weekday)} · ${e(d.title)}` +
+        `<span class="dim"> ${d.totalSets} 组 · 约 ${d.minutes} min · ≈ ${d.burnKcal} kcal</span></div>` +
+        `<table class="tbl"><thead><tr><th>#</th><th>动作</th><th>组×次</th><th>间歇</th></tr></thead>` +
+        `<tbody>${rows}</tbody></table></div>`;
+    }).join('');
+
+    /* ── meals ── */
+    const mealsHtml = r.meals.map(m =>
+      `<div class="mb"><div class="mt">${e(m.name)}<span class="kb">${m.kcal} kcal</span></div>` +
+      `<div class="dim">碳水 ${m.carbG}g · 蛋白 ${m.proteinG}g · 脂肪 ${m.fatG}g</div>` +
+      `<ul>${foodList(m.foods)}</ul>` +
+      (m.tip ? `<div class="note">${e(m.tip)}</div>` : '') + `</div>`).join('');
+
+    /* ── recipes ── */
+    const R = r.recipes;
+    const recBlock = (title, list2) =>
+      `<h3>${title}</h3><div class="rg">${list2.map(rc =>
+        `<div class="rc"><div class="rn">${e(rc.name)}` +
+        (rc.kcal ? `<span class="kb">约 ${rc.kcal} kcal</span>` : '') + `</div>` +
+        `<ul>${foodList(rc.itemsDetailed || rc.items.map(x => ({ text: x })))}</ul>` +
+        `<div class="note">${e(rc.how)}</div></div>`).join('')}</div>`;
+
+    /* ── BMR table ── */
+    const bmrRows = r.bmrStrategy ? Object.values(r.bmrStrategy.models || {}).map(m2 => {
+      const sel = m2.key === r.bmrStrategy.selectedKey;
+      return `<tr${sel ? ' class="sel"' : ''}><td>${e(m2.label)}</td><td>${m2.bmr ?? '—'} kcal</td>` +
+        `<td>${sel ? '✓ 当前基准' : ''}</td><td>${e(m2.note || '')}</td></tr>`;
+    }).join('') : '';
+
+    /* ── macros pct ── */
+    const tKcal = r.target.kcal;
+    const cp = Math.round(M.carbKcal / tKcal * 100);
+    const pp = Math.round(M.proteinKcal / tKcal * 100);
+    const fp = 100 - cp - pp;
+
+    const css = `
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'PingFang SC','Helvetica Neue',Arial,sans-serif;font-size:10pt;color:#1e293b;line-height:1.65;background:#fff;padding:14mm 16mm}
+@page{size:A4;margin:14mm 16mm}
+@media print{body{padding:0}}
+h1{font-size:17pt;color:#0f766e;margin-bottom:3px}
+h2{font-size:12.5pt;color:#0f766e;border-bottom:2px solid #0f766e;padding-bottom:4px;margin:20px 0 10px;page-break-after:avoid}
+h3{font-size:10pt;font-weight:700;margin:12px 0 5px;page-break-after:avoid}
+p,ul{margin-bottom:6px}ul{padding-left:18px}li{margin-bottom:2px}
+.header{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #0f766e;padding-bottom:8px;margin-bottom:12px}
+.subtitle{font-size:9pt;color:#64748b;margin-top:3px}.hmeta{font-size:8.5pt;color:#94a3b8;text-align:right}
+.disc{background:#fef9c3;border:1.5px solid #f59e0b;border-radius:5px;padding:7px 11px;margin-bottom:12px;font-size:9pt;color:#78350f}
+.kvg{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0}
+.kvc{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:8px 10px;text-align:center}
+.kl{font-size:7.5pt;color:#64748b;margin-bottom:2px}.kv{font-size:13pt;font-weight:700;color:#0f766e}.ku{font-size:7.5pt;color:#94a3b8;font-weight:400}
+.mbar{display:flex;gap:8px;align-items:center;margin:5px 0;font-size:9pt}
+.ml{width:80px;flex-shrink:0}.mbt{flex:1;background:#f1f5f9;border-radius:99px;height:8px;overflow:hidden}
+.mbf{height:100%;border-radius:99px}.mv{width:45px;text-align:right;flex-shrink:0;font-weight:700}
+.tbl{width:100%;border-collapse:collapse;font-size:9pt;margin:6px 0}
+.tbl th{background:#f1f5f9;font-weight:600;padding:5px 8px;text-align:left;border-bottom:1px solid #cbd5e1}
+.tbl td{padding:5px 8px;border-bottom:1px solid #f1f5f9;vertical-align:top}
+.tbl tr:last-child td{border-bottom:none}.tbl tr.sel td{background:#ecfdf5;font-weight:600}
+.dim{font-size:8.5pt;color:#94a3b8}
+.kb{display:inline-block;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:999px;padding:0 6px;font-size:8pt;color:#065f46;margin-left:5px;white-space:nowrap}
+.db{margin:8px 0;page-break-inside:avoid;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px}
+.dt{font-weight:700;font-size:10pt;margin-bottom:6px}
+.mb{margin:8px 0;page-break-inside:avoid;border-left:3px solid #0f766e;padding:4px 0 4px 12px}
+.mt{font-weight:700;font-size:10.5pt;margin-bottom:2px}
+.note{font-size:8.5pt;color:#64748b;background:#f8fafc;border-radius:4px;padding:4px 8px;margin-top:4px}
+.rg{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:8px 0}
+.rc{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px;page-break-inside:avoid}
+.rn{font-weight:700;margin-bottom:4px}
+.twocol{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.pg{page-break-before:always}
+.footer{margin-top:20px;border-top:1px solid #e2e8f0;padding-top:8px;font-size:8pt;color:#94a3b8;text-align:center}`;
+
+    return `<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"/>
+<title>健身饮食方案 ${dateStr}</title>
+<style>${css}</style>
+</head><body>
+
+<div class="header">
+  <div>
+    <h1>🏋️ 个人健身饮食方案</h1>
+    <div class="subtitle">目标：${e(goalLabel)} · ${e(sexLabel)} · ${form.age} 岁 · ${form.heightCm} cm · ${form.weightKg} kg${form.bodyFatPct ? ' · 体脂 ' + form.bodyFatPct + '%' : ''}</div>
+    <div class="subtitle">${e(act.name || '')}</div>
+  </div>
+  <div class="hmeta">生成日期：${dateStr}<br>版本：${e(meta.version || '—')}</div>
+</div>
+<div class="disc">⚠️ <strong>免责声明：</strong>本方案仅供健康参考，不构成医疗建议。请在实施前咨询专业医生或持证健身专家。</div>
+
+<h2>一、身体评估 &amp; 能量分析</h2>
+<div class="kvg">
+  ${kvCell('BMI', r.bmi?.value ?? '—', r.bmi?.cat ?? '')}
+  ${kvCell('BMR 基础代谢', r.bmr, 'kcal / 日')}
+  ${kvCell('TDEE 总消耗', r.tdee, 'kcal / 日')}
+  ${kvCell('目标热量（' + goalLabel + '）', tKcal, (tKcal - r.tdee >= 0 ? '+' : '') + (tKcal - r.tdee) + ' kcal')}
+  ${r.leanMassKg != null ? kvCell('瘦体重', r.leanMassKg, 'kg · 体脂 ' + form.bodyFatPct + '%') : ''}
+  ${kvCell('健康体重区间', (guide.healthy?.low ?? '—') + '–' + (guide.healthy?.high ?? '—'), 'kg')}
+  ${guide.actionLabel ? kvCell(guide.actionLabel, guide.actionValue, guide.actionSub) : ''}
+  ${guide.paceLabel ? kvCell(guide.paceLabel, guide.paceValue, guide.paceSub) : ''}
+</div>
+
+<h3>三大营养素分配</h3>
+${mBar('碳水', cp, '#f59e0b', M.carbG)}
+${mBar('蛋白质', pp, '#3b82f6', M.proteinG)}
+${mBar('脂肪', fp, '#a78bfa', M.fatG)}
+
+${bmrRows ? `<h3>BMR 三公式对比（自动择优）</h3>
+<table class="tbl"><thead><tr><th>公式</th><th>BMR</th><th>基准</th><th>说明</th></tr></thead>
+<tbody>${bmrRows}</tbody></table>` : ''}
+
+<h3>评估建议</h3>
+<ul>${list(guide.notes || [])}</ul>
+<ul>${list(r.target.notes || [])}</ul>
+
+<div class="pg"></div>
+<h2>二、训练计划（${tp.freq} 天/周 · ${e(tp.splitName)}）</h2>
+<div class="kvg">
+  ${kvCell('训练频率', tp.freq, '天 / 周')}
+  ${kvCell('分化方式', tp.splitName, '')}
+  ${kvCell('单次消耗', Math.round(tp.weeklyBurnKcal / Math.max(1, tp.days.length)), 'kcal / 次')}
+  ${kvCell('每周消耗', tp.weeklyBurnKcal, 'kcal / 周')}
+</div>
+<p class="dim">${e(tp.splitDesc)}</p>
+${trainingHtml}
+
+<div class="pg"></div>
+<h2>三、每日饮食方案</h2>
+<p class="dim">合计 ${tKcal} kcal · 膳食纤维 ${r.fiber.min}–${r.fiber.max} g / 日</p>
+${mealsHtml}
+
+<div class="pg"></div>
+<h2>四、食谱推荐</h2>
+${recBlock('早餐 / 早加餐', R.early)}
+${recBlock('训后加餐', R.post)}
+${recBlock('晚餐 / 夜宵', R.last)}
+
+<h2>五、运动营养 &amp; 水分指南</h2>
+<div class="twocol">
+  <div>
+    <h3>水分补充</h3>
+    <ul>
+      <li>全天补水：约 ${Math.round(form.weightKg * 35)} mL</li>
+      <li>训前：${r.water.preLo}–${r.water.preHi} mL（运动前 2 h）</li>
+      <li>训中：每小时 ≤ ${r.water.midMaxPerHour} mL</li>
+      <li>训后：按失重量 × 140% 补回</li>
+    </ul>
+  </div>
+  <div>
+    <h3>烹饪建议</h3>
+    <ul>
+      <li><strong>分类：</strong>${e(r.cooking.cls)}</li>
+      <li><strong>方式：</strong>${e(r.cooking.methods)}</li>
+      <li><strong>用油：</strong>${e(r.cooking.oil)}</li>
+      <li><strong>调味：</strong>${e(r.cooking.salt)}</li>
+    </ul>
+  </div>
+</div>
+
+<h2>六、周期调整建议</h2>
+<ul>${list(r.adjust || [])}</ul>
+
+<div class="footer">
+  本方案由智能健身饮食方案生成 · 版本 ${e(meta.version || '—')} · 更新 ${e(meta.updatedAt || '—')} · 仅供参考，不构成医疗建议
+</div>
+<script>window.onload=function(){window.print();};<\/script>
+</body></html>`;
   }
 
+  // ── 打开干净 A4 打印窗口 ───────────────────────────────────────────
+  function openPrintWindow(r, form) {
+    const html = buildPrintDoc(r, form);
+    const w = window.open('', '_blank', 'width=920,height=700,scrollbars=yes');
+    if (!w) { alert('请允许浏览器弹出窗口以导出 PDF / 图片'); return null; }
+    w.document.write(html);
+    w.document.close();
+    return w;
+  }
+
+  // ── 导出 PDF（打印窗口 → 另存为 PDF）───────────────────────────────
   async function exportPdf() {
-    if (!window.html2canvas) { alert('导出库加载中，请稍后再试'); return; }
-    if (!window.jspdf) { alert('PDF库加载中，请稍后再试'); return; }
-    const node = $('#report-main') || $('#report');
-    if (!node) { alert('未找到报告内容'); return; }
-    const btn = $('#btn-print');
+    if (!_lastReport || !_lastForm) { alert('请先生成方案'); return; }
+    openPrintWindow(_lastReport, _lastForm);
+  }
+
+  // ── 导出 PNG（A4 排版截图）──────────────────────────────────────────
+  async function exportPng() {
+    if (!window.html2canvas) { alert('图片导出库加载中，请稍后再试'); return; }
+    const btn = $('#btn-png');
     if (btn) { btn.disabled = true; btn.textContent = '生成中…'; }
     try {
-      const canvas = await html2canvas(node, {scale:2, backgroundColor:'#ffffff', useCORS:true, logging:false});
-      const { jsPDF } = window.jspdf;
-      const pdf = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
-      const pageW = pdf.internal.pageSize.getWidth();
-      const pageH = pdf.internal.pageSize.getHeight();
-      const imgData = canvas.toDataURL('image/jpeg', 0.92);
-      const imgH = (canvas.height * pageW) / canvas.width;
-      let y = 0;
-      while (y < imgH) {
-        if (y > 0) pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', 0, -y, pageW, imgH);
-        y += pageH;
+      if (_lastReport && _lastForm) {
+        // Render clean A4 HTML into a hidden iframe and capture
+        const html = buildPrintDoc(_lastReport, _lastForm);
+        const iframe = document.createElement('iframe');
+        iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;height:1123px;border:none;visibility:hidden';
+        // Remove the auto-print script for iframe capture
+        const staticHtml = html.replace(/<script>window\.onload.*?<\/script>/s, '');
+        document.body.appendChild(iframe);
+        await new Promise(resolve => {
+          iframe.onload = resolve;
+          iframe.srcdoc = staticHtml;
+          setTimeout(resolve, 1800);
+        });
+        const canvas = await html2canvas(iframe.contentDocument.body, {
+          scale: 2, backgroundColor: '#ffffff', useCORS: true,
+          width: 794, windowWidth: 794
+        });
+        document.body.removeChild(iframe);
+        const a = document.createElement('a');
+        a.download = `健身饮食方案_${new Date().toISOString().slice(0,10)}.png`;
+        a.href = canvas.toDataURL('image/png');
+        a.click();
+      } else {
+        // Fallback: capture current report DOM
+        const node = $('#report-main') || $('#report');
+        const canvas = await html2canvas(node, {scale:2, backgroundColor:'#ffffff', useCORS:true});
+        const a = document.createElement('a');
+        a.download = `健身饮食方案_${new Date().toISOString().slice(0,10)}.png`;
+        a.href = canvas.toDataURL('image/png');
+        a.click();
       }
-      pdf.save(`健身饮食方案_${new Date().toISOString().slice(0,10)}.pdf`);
     } finally {
-      if (btn) { btn.disabled = false; btn.textContent = '导出 PDF'; }
+      if (btn) { btn.disabled = false; btn.textContent = '保存图片'; }
     }
   }
 
