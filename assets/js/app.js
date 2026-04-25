@@ -363,7 +363,7 @@
     $('#btn-clear').onclick = clearAll;
     $('#btn-gen').onclick = doGenerate;
 
-    $('#btn-print').onclick = () => window.print();
+    $('#btn-print').onclick = () => window.UI.exportPdf();
     $('#btn-png').onclick = () => window.UI.exportPng();
     $('#btn-back').onclick = () => $('#input-card').scrollIntoView({behavior:'smooth'});
 

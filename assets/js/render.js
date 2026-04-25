@@ -567,5 +567,32 @@
     a.click();
   }
 
-  window.UI = { renderForm, readForm, renderReport, exportPng };
+  async function exportPdf() {
+    if (!window.html2canvas) { alert('导出库加载中，请稍后再试'); return; }
+    if (!window.jspdf) { alert('PDF库加载中，请稍后再试'); return; }
+    const node = $('#report-main') || $('#report');
+    if (!node) { alert('未找到报告内容'); return; }
+    const btn = $('#btn-print');
+    if (btn) { btn.disabled = true; btn.textContent = '生成中…'; }
+    try {
+      const canvas = await html2canvas(node, {scale:2, backgroundColor:'#ffffff', useCORS:true, logging:false});
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const imgData = canvas.toDataURL('image/jpeg', 0.92);
+      const imgH = (canvas.height * pageW) / canvas.width;
+      let y = 0;
+      while (y < imgH) {
+        if (y > 0) pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, -y, pageW, imgH);
+        y += pageH;
+      }
+      pdf.save(`健身饮食方案_${new Date().toISOString().slice(0,10)}.pdf`);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '导出 PDF'; }
+    }
+  }
+
+  window.UI = { renderForm, readForm, renderReport, exportPng, exportPdf };
 })();
