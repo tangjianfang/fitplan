@@ -765,20 +765,63 @@ ${recBlock('晚餐 / 夜宵', R.last)}
 </body></html>`;
   }
 
-  // ── 打开干净 A4 打印窗口 ───────────────────────────────────────────
-  function openPrintWindow(r, form) {
-    const html = buildPrintDoc(r, form);
-    const w = window.open('', '_blank', 'width=920,height=700,scrollbars=yes');
-    if (!w) { alert('请允许浏览器弹出窗口以导出 PDF / 图片'); return null; }
-    w.document.write(html);
-    w.document.close();
-    return w;
-  }
-
-  // ── 导出 PDF（打印窗口 → 另存为 PDF）───────────────────────────────
+  // ── 导出 PDF（直接下载，无打印弹窗）──────────────────────────────
   async function exportPdf() {
     if (!_lastReport || !_lastForm) { alert('请先生成方案'); return; }
-    openPrintWindow(_lastReport, _lastForm);
+    if (!window.html2canvas) { alert('导出库加载中，请稍后再试'); return; }
+    if (!window.jspdf) { alert('PDF 库加载中，请稍后再试'); return; }
+    const btn = $('#btn-print');
+    if (btn) { btn.disabled = true; btn.textContent = '生成中…'; }
+    try {
+      const html = buildPrintDoc(_lastReport, _lastForm);
+      const staticHtml = html.replace(/<script>window\.onload.*?<\/script>/s, '');
+      // Render into hidden iframe at A4 width (794px = 210mm @96dpi)
+      const iframe = document.createElement('iframe');
+      iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;height:1px;border:none;visibility:hidden;overflow:hidden';
+      document.body.appendChild(iframe);
+      await new Promise(resolve => {
+        iframe.onload = () => setTimeout(resolve, 600);
+        iframe.srcdoc = staticHtml;
+        setTimeout(resolve, 2500);
+      });
+      const iDoc = iframe.contentDocument;
+      const fullH = iDoc.documentElement.scrollHeight || iDoc.body.scrollHeight;
+      iframe.style.height = fullH + 'px';
+      await new Promise(r => setTimeout(r, 200));
+      const canvas = await html2canvas(iDoc.body, {
+        scale: 2, backgroundColor: '#ffffff', useCORS: true,
+        width: 794, windowWidth: 794, height: fullH, windowHeight: fullH,
+        scrollX: 0, scrollY: 0
+      });
+      document.body.removeChild(iframe);
+      const { jsPDF } = window.jspdf;
+      // A4: 210×297 mm
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pageW = 210, pageH = 297;
+      const imgW = canvas.width, imgH = canvas.height;
+      // px per mm based on canvas representing 794px = 210mm
+      const pxPerMm = imgW / pageW;
+      const pxPageH = pageH * pxPerMm;
+      let yPx = 0;
+      while (yPx < imgH) {
+        if (yPx > 0) pdf.addPage();
+        // Crop one page slice from canvas
+        const sliceH = Math.min(pxPageH, imgH - yPx);
+        const pageCanvas = document.createElement('canvas');
+        pageCanvas.width = imgW;
+        pageCanvas.height = pxPageH;
+        const ctx = pageCanvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, imgW, pxPageH);
+        ctx.drawImage(canvas, 0, yPx, imgW, sliceH, 0, 0, imgW, sliceH);
+        const imgData = pageCanvas.toDataURL('image/jpeg', 0.93);
+        pdf.addImage(imgData, 'JPEG', 0, 0, pageW, pageH);
+        yPx += pxPageH;
+      }
+      pdf.save(`健身饮食方案_${new Date().toISOString().slice(0, 10)}.pdf`);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '导出 PDF'; }
+    }
   }
 
   // ── 导出 PNG（A4 排版截图）──────────────────────────────────────────
