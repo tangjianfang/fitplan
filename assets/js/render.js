@@ -105,7 +105,7 @@
         id: 'training-plan',
         title: t('grp_training_plan'),
         icon: '🏋️',
-        report: true,
+        report: false,
         items: [
           ['training', t('sec_training'), '🏋️'],
           ['week', t('sec_week'), '📅'],
@@ -115,7 +115,7 @@
         id: 'diet-plan',
         title: t('grp_diet_plan'),
         icon: '🍱',
-        report: true,
+        report: false,
         items: [
           ['meals', t('sec_meals'), '🍱'],
           ['recipes', t('sec_recipes'), '👨‍🍳'],
@@ -125,7 +125,7 @@
         id: 'rules',
         title: t('grp_rules'),
         icon: '🧭',
-        report: true,
+        report: false,
         items: [
           ['guidelines', t('sec_guidelines'), '🧭'],
         ],
@@ -152,7 +152,7 @@
     const r = window.CALC.buildReport(form);
     _lastReport = r; _lastForm = form;
     const SECTION_GROUPS = getSectionGroups();
-    const REFERENCE_GROUP = SECTION_GROUPS.find(group => !group.report);
+    const REFERENCE_GROUPS = SECTION_GROUPS.filter(group => !group.report);
 
     const wrap = $('#report');
     wrap.innerHTML = `
@@ -207,7 +207,7 @@
       tocList.appendChild(groupEl);
     });
 
-    referenceArea.innerHTML = renderReferenceArea(r, form, REFERENCE_GROUP);
+    referenceArea.innerHTML = renderReferenceArea(r, form, REFERENCE_GROUPS);
 
     bindScrollSpy();
     bindTocClick();
@@ -506,9 +506,9 @@
       <ul class="tight">${P.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`;
   }
 
-  function renderReferenceArea(r, form, REFERENCE_GROUP) {
-    if (!REFERENCE_GROUP) return '';
-    const details = REFERENCE_GROUP.items.map(([id, title, icon]) => `
+  function renderReferenceArea(r, form, REFERENCE_GROUPS) {
+    if (!REFERENCE_GROUPS || !REFERENCE_GROUPS.length) return '';
+    const allDetails = REFERENCE_GROUPS.flatMap(group => group.items).map(([id, title, icon]) => `
       <details class="ref-detail" id="sec-${id}" data-sec="${id}">
         <summary>
           <span class="ti">${icon}</span>
@@ -524,7 +524,7 @@
           <p>${t('ref_not_exported')}</p>
         </div>
       </div>
-      <div class="ref-list">${details}</div>`;
+      <div class="ref-list">${allDetails}</div>`;
   }
 
   // —— 滚动监听 + TOC 高亮
@@ -686,22 +686,16 @@ p,ul{margin-bottom:6px}ul{padding-left:18px}li{margin-bottom:2px}
 </div>
 <div class="disc">⚠️ <strong>免责声明：</strong>本方案仅供健康参考，不构成医疗建议。请在实施前咨询专业医生或持证健身专家。</div>
 
-<h2>一、身体评估 &amp; 能量分析</h2>
+<h2>一、身体评估</h2>
 <div class="kvg">
   ${kvCell('BMI', r.bmi?.value ?? '—', r.bmi?.cat ?? '')}
   ${kvCell('BMR 基础代谢', r.bmr, 'kcal / 日')}
   ${kvCell('TDEE 总消耗', r.tdee, 'kcal / 日')}
-  ${kvCell('目标热量（' + goalLabel + '）', tKcal, (tKcal - r.tdee >= 0 ? '+' : '') + (tKcal - r.tdee) + ' kcal')}
   ${r.leanMassKg != null ? kvCell('瘦体重', r.leanMassKg, 'kg · 体脂 ' + form.bodyFatPct + '%') : ''}
   ${kvCell('健康体重区间', (guide.healthy?.low ?? '—') + '–' + (guide.healthy?.high ?? '—'), 'kg')}
   ${guide.actionLabel ? kvCell(guide.actionLabel, guide.actionValue, guide.actionSub) : ''}
   ${guide.paceLabel ? kvCell(guide.paceLabel, guide.paceValue, guide.paceSub) : ''}
 </div>
-
-<h3>三大营养素分配</h3>
-${mBar('碳水', cp, '#f59e0b', M.carbG)}
-${mBar('蛋白质', pp, '#3b82f6', M.proteinG)}
-${mBar('脂肪', fp, '#a78bfa', M.fatG)}
 
 ${bmrRows ? `<h3>BMR 三公式对比（自动择优）</h3>
 <table class="tbl"><thead><tr><th>公式</th><th>BMR</th><th>基准</th><th>说明</th></tr></thead>
@@ -709,54 +703,20 @@ ${bmrRows ? `<h3>BMR 三公式对比（自动择优）</h3>
 
 <h3>评估建议</h3>
 <ul>${list(guide.notes || [])}</ul>
-<ul>${list(r.target.notes || [])}</ul>
 
-<div class="pg"></div>
-<h2>二、训练计划（${tp.freq} 天/周 · ${e(tp.splitName)}）</h2>
+<h2>二、热量与营养</h2>
 <div class="kvg">
-  ${kvCell('训练频率', tp.freq, '天 / 周')}
-  ${kvCell('分化方式', tp.splitName, '')}
-  ${kvCell('单次消耗', Math.round(tp.weeklyBurnKcal / Math.max(1, tp.days.length)), 'kcal / 次')}
-  ${kvCell('每周消耗', tp.weeklyBurnKcal, 'kcal / 周')}
-</div>
-<p class="dim">${e(tp.splitDesc)}</p>
-${trainingHtml}
-
-<div class="pg"></div>
-<h2>三、每日饮食方案</h2>
-<p class="dim">合计 ${tKcal} kcal · 膳食纤维 ${r.fiber.min}–${r.fiber.max} g / 日</p>
-${mealsHtml}
-
-<div class="pg"></div>
-<h2>四、食谱推荐</h2>
-${recBlock('早餐 / 早加餐', R.early)}
-${recBlock('训后加餐', R.post)}
-${recBlock('晚餐 / 夜宵', R.last)}
-
-<h2>五、运动营养 &amp; 水分指南</h2>
-<div class="twocol">
-  <div>
-    <h3>水分补充</h3>
-    <ul>
-      <li>全天补水：约 ${Math.round(form.weightKg * 35)} mL</li>
-      <li>训前：${r.water.preLo}–${r.water.preHi} mL（运动前 2 h）</li>
-      <li>训中：每小时 ≤ ${r.water.midMaxPerHour} mL</li>
-      <li>训后：按失重量 × 140% 补回</li>
-    </ul>
-  </div>
-  <div>
-    <h3>烹饪建议</h3>
-    <ul>
-      <li><strong>分类：</strong>${e(r.cooking.cls)}</li>
-      <li><strong>方式：</strong>${e(r.cooking.methods)}</li>
-      <li><strong>用油：</strong>${e(r.cooking.oil)}</li>
-      <li><strong>调味：</strong>${e(r.cooking.salt)}</li>
-    </ul>
-  </div>
+  ${kvCell('目标热量（' + goalLabel + '）', tKcal, (tKcal - r.tdee >= 0 ? '+' : '') + (tKcal - r.tdee) + ' kcal')}
+  ${kvCell('膳食纤维', r.fiber.min + (r.fiber.max !== r.fiber.min ? '–' + r.fiber.max : ''), 'g / 日')}
 </div>
 
-<h2>六、周期调整建议</h2>
-<ul>${list(r.adjust || [])}</ul>
+<h3>三大营养素分配</h3>
+${mBar('碳水', cp, '#f59e0b', M.carbG)}
+${mBar('蛋白质', pp, '#3b82f6', M.proteinG)}
+${mBar('脂肪', fp, '#a78bfa', M.fatG)}
+
+<h3>热量说明</h3>
+<ul>${list(r.target.notes || [])}</ul>
 
 <div class="footer">
   本方案由智能健身饮食方案生成 · 版本 ${e(meta.version || '—')} · 更新 ${e(meta.updatedAt || '—')} · 仅供参考，不构成医疗建议
